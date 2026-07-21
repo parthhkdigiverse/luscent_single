@@ -503,14 +503,10 @@ async def delete_admin_product(product_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted successfully"}
 
-class AdminLoginRequest(BaseModel):
-    username: str
-    password: str
-
 @app.post("/api/admin/login")
-async def admin_login(req: AdminLoginRequest):
-    username = req.username
-    password = req.password
+async def admin_login(body: dict = Body(...)):
+    username = body.get("username")
+    password = body.get("password")
     
     expected_user = os.getenv("ADMIN_USERNAME", "admin")
     expected_pass = os.getenv("ADMIN_PASSWORD", "adminsecret")
