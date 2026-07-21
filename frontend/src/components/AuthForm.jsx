@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { API_URL } from "../config";
 import { Button } from "./Button";
-import { Mail, Lock, User, AlertCircle, CheckCircle2, Loader2, KeyRound, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, AlertCircle, CheckCircle2, Loader2, KeyRound, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export const AuthForm = ({ onSuccess }) => {
   const { login, signup, authLoading } = useAuth();
@@ -15,6 +15,8 @@ export const AuthForm = ({ onSuccess }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Forgot password states
   const [resetOtp, setResetOtp] = useState("");
@@ -244,15 +246,23 @@ export const AuthForm = ({ onSuccess }) => {
                   <Lock size={16} />
                 </span>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   placeholder="••••••••"
                   required
                   minLength={6}
                   disabled={isLoading}
-                  className="w-full pl-11 pr-4 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
+                  className="w-full pl-11 pr-11 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-grey/60 hover:text-brand-dark"
+                  disabled={isLoading}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
@@ -405,14 +415,22 @@ export const AuthForm = ({ onSuccess }) => {
               <Lock size={16} />
             </span>
             <input
-              type="password"
+              type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
               disabled={isLoading}
-              className="w-full pl-11 pr-4 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
+              className="w-full pl-11 pr-11 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-grey/60 hover:text-brand-dark"
+              disabled={isLoading}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
         </div>
 
@@ -427,14 +445,22 @@ export const AuthForm = ({ onSuccess }) => {
                 <Lock size={16} />
               </span>
               <input
-                type="password"
+                type={showConfirmPassword ? "text" : "password"}
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
                 required
                 disabled={isLoading}
-                className="w-full pl-11 pr-4 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
+                className="w-full pl-11 pr-11 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all disabled:opacity-60"
               />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-grey/60 hover:text-brand-dark"
+                disabled={isLoading}
+              >
+                {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
         )}

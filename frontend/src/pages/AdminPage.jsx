@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
-  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload
+  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -16,6 +16,7 @@ export const AdminPage = () => {
   });
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState("");
   const [submittingLogin, setSubmittingLogin] = useState(false);
 
@@ -535,16 +536,23 @@ export const AdminPage = () => {
               <label className="font-semibold text-brand-dark block mb-1">Password</label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-grey/60">
-                  <Lock size={15} />
+                  <Lock size={16} />
                 </span>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   required
-                  className="w-full pl-11 pr-4 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition-all"
+                  className="w-full pl-11 pr-11 py-3 bg-white border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark transition-colors"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-brand-grey/60 hover:text-brand-dark transition-colors"
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
               </div>
             </div>
 
