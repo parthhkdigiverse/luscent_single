@@ -28,7 +28,6 @@ export const ContactPage = () => {
           });
         }
       })
-      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
