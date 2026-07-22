@@ -7,6 +7,7 @@ import { API_URL } from "../config";
 export const FAQPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [faqList, setFaqList] = useState(staticFaqs);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`${API_URL}/api/content/faq_categories`, { cache: 'no-store' })
@@ -16,8 +17,18 @@ export const FAQPage = () => {
           setFaqList(data.content);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-brand-bg z-50">
+        <div className="w-12 h-12 border-4 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin mb-4"></div>
+        <p className="text-brand-dark font-serif text-lg animate-pulse">Loading FAQs...</p>
+      </div>
+    );
+  }
 
   // Filter FAQs based on search
   const filteredFaqs = faqList.map(cat => {
