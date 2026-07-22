@@ -609,11 +609,18 @@ async def upsert_content_block(section_key: str, body: dict = Body(...), current
     content = body.get("content")
     if content is None:
         raise HTTPException(status_code=400, detail="Missing 'content' field")
-    result = await content_collection.update_one(
-        {"section_key": section_key},
-        {"$set": {"section_key": section_key, "content": content}},
-        upsert=True
-    )
+    from pymongo.errors import DocumentTooLarge
+    try:
+        result = await content_collection.update_one(
+            {"section_key": section_key},
+            {"$set": {"section_key": section_key, "content": content}},
+            upsert=True
+        )
+    except DocumentTooLarge:
+        raise HTTPException(status_code=413, detail="The uploaded images are too large. Please compress them to be under 10MB in total before saving.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
     return {"message": f"Content block '{section_key}' saved successfully"}
 
 @app.delete("/api/admin/content/{section_key}")
