@@ -41,6 +41,7 @@ const defaultHeroSlides = [
 export const HomePage = () => {
   const [productList, setProductList] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingContent, setLoadingContent] = useState(true);
   const [heroSlides, setHeroSlides] = useState(defaultHeroSlides);
   const [bannerText, setBannerText] = useState({ title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." });
   const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
@@ -74,6 +75,8 @@ export const HomePage = () => {
         }
       } catch (err) {
         console.warn("Content API not available, using static defaults:", err.message);
+      } finally {
+        setLoadingContent(false);
       }
     };
     loadProducts();
@@ -127,8 +130,13 @@ export const HomePage = () => {
     }
   ];
 
-  if (loadingProducts) {
-    return <div className="py-32 text-center text-brand-grey text-sm">Loading products...</div>;
+  if (loadingProducts || loadingContent) {
+    return (
+      <div className="fixed inset-0 flex flex-col items-center justify-center bg-brand-bg z-50">
+        <div className="w-12 h-12 border-4 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin mb-4"></div>
+        <p className="text-brand-dark font-serif text-lg animate-pulse">Loading Luscent Glow...</p>
+      </div>
+    );
   }
 
   return (
