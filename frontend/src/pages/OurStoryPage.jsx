@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Sparkles, Shield, Heart, Award } from "lucide-react";
 import { Button } from "../components/Button";
 import { API_URL } from "../config";
+import { Loader } from "../components/Loader";
 
 export const OurStoryPage = ({ previewData }) => {
   const [ourStory, setOurStory] = useState({
@@ -44,12 +45,7 @@ export const OurStoryPage = ({ previewData }) => {
   }, [previewData]);
 
   if (loading && !previewData) {
-    return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-brand-bg z-50">
-        <div className="w-12 h-12 border-4 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin mb-4"></div>
-        <p className="text-brand-dark font-serif text-lg animate-pulse">Loading Our Story...</p>
-      </div>
-    );
+    return <Loader text="Loading Our Story..." />;
   }
 
   // Helper to render bold text

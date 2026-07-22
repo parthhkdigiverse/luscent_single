@@ -3,6 +3,7 @@ import { faqs as staticFaqs } from "../data/faqs";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { HelpCircle, Search } from "lucide-react";
 import { API_URL } from "../config";
+import { Loader } from "../components/Loader";
 
 export const FAQPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
@@ -22,12 +23,7 @@ export const FAQPage = () => {
   }, []);
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 flex flex-col items-center justify-center bg-brand-bg z-50">
-        <div className="w-12 h-12 border-4 border-brand-accent/30 border-t-brand-accent rounded-full animate-spin mb-4"></div>
-        <p className="text-brand-dark font-serif text-lg animate-pulse">Loading FAQs...</p>
-      </div>
-    );
+    return <Loader text="Loading FAQs..." />;
   }
 
   // Filter FAQs based on search
