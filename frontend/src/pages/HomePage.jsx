@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight } from "lucide-react";
-import { products } from "../data/products";
 import { testimonials as staticTestimonials } from "../data/testimonials";
 import { faqs as staticFaqs } from "../data/faqs";
 import { Button } from "../components/Button";
@@ -40,7 +39,8 @@ const defaultHeroSlides = [
 ];
 
 export const HomePage = () => {
-  const [productList, setProductList] = useState(products);
+  const [productList, setProductList] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [heroSlides, setHeroSlides] = useState(defaultHeroSlides);
   const [bannerText, setBannerText] = useState({ title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." });
   const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
@@ -57,7 +57,9 @@ export const HomePage = () => {
           }
         }
       } catch (err) {
-        console.warn("FastAPI backend not available, using static product list:", err.message);
+        console.warn("FastAPI backend not available:", err.message);
+      } finally {
+        setLoadingProducts(false);
       }
     };
     const loadContent = async () => {
@@ -79,9 +81,9 @@ export const HomePage = () => {
   }, []);
 
   // Extract products
-  const sunscreen = productList.find(p => p.id === "sunscreen") || products.find(p => p.id === "sunscreen");
-  const faceWash = productList.find(p => p.id === "face-wash") || products.find(p => p.id === "face-wash");
-  const combo = productList.find(p => p.id === "combo") || products.find(p => p.id === "combo");
+  const sunscreen = productList.find(p => p.id === "sunscreen");
+  const faceWash = productList.find(p => p.id === "face-wash");
+  const combo = productList.find(p => p.id === "combo");
 
   const [activeSlide, setActiveSlide] = useState(0);
 
@@ -124,6 +126,10 @@ export const HomePage = () => {
       text: "text-brand-dark"
     }
   ];
+
+  if (loadingProducts) {
+    return <div className="py-32 text-center text-brand-grey text-sm">Loading products...</div>;
+  }
 
   return (
     <div className="pt-20 pb-12 overflow-x-hidden">

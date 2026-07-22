@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart } from "lucide-react";
-import { products } from "../data/products";
 import { Button } from "../components/Button";
 import { RatingStars } from "../components/RatingStars";
 import { ProductGallery } from "../components/ProductGallery";
@@ -16,6 +15,7 @@ export const ProductPage = () => {
   const navigate = useNavigate();
   const { addToCart } = useCart();
   const [product, setProduct] = useState(null);
+  const [allProducts, setAllProducts] = useState([]);
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
@@ -23,18 +23,22 @@ export const ProductPage = () => {
   useEffect(() => {
     const loadProduct = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/products/${slug}`);
-        if (!res.ok) throw new Error("Failed to fetch product");
-        const data = await res.json();
+        const [resProduct, resAll] = await Promise.all([
+          fetch(`${API_URL}/api/products/${slug}`),
+          fetch(`${API_URL}/api/products`)
+        ]);
+        
+        if (!resProduct.ok) throw new Error("Failed to fetch product");
+        const data = await resProduct.json();
         setProduct(data);
-      } catch (err) {
-        console.warn("FastAPI backend not available, loading local product data:", err.message);
-        const foundProduct = products.find((p) => p.slug === slug);
-        if (foundProduct) {
-          setProduct(foundProduct);
-        } else {
-          navigate("/");
+        
+        if (resAll.ok) {
+          const allData = await resAll.json();
+          setAllProducts(allData);
         }
+      } catch (err) {
+        console.warn("FastAPI backend not available:", err.message);
+        navigate("/");
       }
     };
     loadProduct();
@@ -45,7 +49,7 @@ export const ProductPage = () => {
   if (!product) return <div className="py-32 text-center text-brand-grey text-sm">Loading...</div>;
 
   const isCombo = product.id === "combo";
-  const crossSells = products.filter((p) => p.id !== product.id);
+  const crossSells = allProducts.filter((p) => p.id !== product.id);
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
