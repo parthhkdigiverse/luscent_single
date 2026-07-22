@@ -1439,8 +1439,8 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert("Image size should be less than 5MB");
+      if (file.size > 20 * 1024 * 1024) {
+        alert("Image size should be less than 20MB");
         return;
       }
       const reader = new FileReader();
@@ -1517,7 +1517,7 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
           </div>
           <div className="text-center">
             <span className="text-xs font-bold text-brand-dark block">Click to Upload Image Directly</span>
-            <span className="text-[10px] text-brand-grey block mt-0.5">Supports PNG, JPG, WEBP, SVG (Max 5MB)</span>
+            <span className="text-[10px] text-brand-grey block mt-0.5">Supports PNG, JPG, WEBP, SVG (Max 20MB)</span>
           </div>
         </button>
       )}
