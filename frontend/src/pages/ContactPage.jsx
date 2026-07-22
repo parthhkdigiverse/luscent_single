@@ -16,7 +16,7 @@ export const ContactPage = () => {
   });
 
   useEffect(() => {
-    fetch(`${API_URL}/api/content/contact_info`)
+    fetch(`${API_URL}/api/content/contact_info`, { cache: 'no-store' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.content) {

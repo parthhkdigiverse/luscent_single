@@ -15,7 +15,7 @@ export const CategoryPage = () => {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(`${API_URL}/api/products`);
+        const res = await fetch(`${API_URL}/api/products`, { cache: 'no-store' });
         if (!res.ok) throw new Error("Failed to load products");
         const data = await res.json();
         // Filter products matching category name

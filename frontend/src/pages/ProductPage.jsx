@@ -24,8 +24,8 @@ export const ProductPage = () => {
     const loadProduct = async () => {
       try {
         const [resProduct, resAll] = await Promise.all([
-          fetch(`${API_URL}/api/products/${slug}`),
-          fetch(`${API_URL}/api/products`)
+          fetch(`${API_URL}/api/products/${slug}`, { cache: 'no-store' }),
+          fetch(`${API_URL}/api/products`, { cache: 'no-store' })
         ]);
         
         if (!resProduct.ok) throw new Error("Failed to fetch product");

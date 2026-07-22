@@ -30,7 +30,7 @@ export const OurStoryPage = ({ previewData }) => {
       setOurStory(prev => ({ ...prev, ...previewData }));
       return;
     }
-    fetch(`${API_URL}/api/content/our_story`)
+    fetch(`${API_URL}/api/content/our_story`, { cache: 'no-store' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.content) {

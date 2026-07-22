@@ -49,7 +49,7 @@ export const HomePage = () => {
   useEffect(() => {
     const loadProducts = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/products`);
+        const res = await fetch(`${API_URL}/api/products`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data && data.length > 0) {
@@ -64,7 +64,7 @@ export const HomePage = () => {
     };
     const loadContent = async () => {
       try {
-        const res = await fetch(`${API_URL}/api/content`);
+        const res = await fetch(`${API_URL}/api/content`, { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
           if (data.hero_slides) setHeroSlides(data.hero_slides);

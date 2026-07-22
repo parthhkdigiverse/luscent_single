@@ -9,7 +9,7 @@ export const FAQPage = () => {
   const [faqList, setFaqList] = useState(staticFaqs);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/content/faq_categories`)
+    fetch(`${API_URL}/api/content/faq_categories`, { cache: 'no-store' })
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (data && data.content) {
