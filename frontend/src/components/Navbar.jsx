@@ -41,13 +41,26 @@ export const Navbar = () => {
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex flex-col text-left group">
-            <h1 className="font-serif text-lg md:text-xl font-bold tracking-[0.2em] text-brand-dark m-0 leading-none group-hover:text-brand-accent transition-colors duration-300">
-              LUSCENT
-            </h1>
-            <span className="text-[8px] tracking-[0.45em] uppercase font-sans font-semibold text-brand-grey mt-0.5 leading-none pl-[2px]">
-              GLOW
-            </span>
+          <Link to="/" className="flex items-center group">
+            <img 
+              src="/images/logo.png" 
+              alt="Luscent Glow" 
+              className="h-8 md:h-10 object-contain transition-transform duration-300 group-hover:scale-105"
+              onError={(e) => {
+                // Fallback to text if the user hasn't saved the logo yet
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            {/* Fallback Text Logo (Hidden by default) */}
+            <div className="hidden flex-col text-left">
+              <h1 className="font-serif text-lg md:text-xl font-bold tracking-[0.2em] text-brand-dark m-0 leading-none group-hover:text-brand-accent transition-colors duration-300">
+                LUSCENT
+              </h1>
+              <span className="text-[8px] tracking-[0.45em] uppercase font-sans font-semibold text-brand-grey mt-0.5 leading-none pl-[2px]">
+                GLOW
+              </span>
+            </div>
           </Link>
 
           {/* Desktop Nav Links */}
