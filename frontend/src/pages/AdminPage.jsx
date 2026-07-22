@@ -995,6 +995,7 @@ export const AdminPage = () => {
                 contentMessage={contentMessage}
                 setContentMessage={setContentMessage}
                 API_URL={API_URL}
+                fetchAuth={fetchAuth}
               />
             )}
           </div>
@@ -1534,7 +1535,7 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   );
 };
 
-const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, setContentSaving, contentMessage, setContentMessage, API_URL }) => {
+const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, setContentSaving, contentMessage, setContentMessage, API_URL, fetchAuth }) => {
   // ─── Local editing states ───
   // Hero Slides
   const heroSlides = contentBlocks.hero_slides || [
@@ -1600,6 +1601,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
       setContentMessage("Error connecting to backend.");
     } finally {
       setContentSaving(false);
+      setTimeout(() => setContentMessage(""), 3500);
     }
   };
 
@@ -1673,13 +1675,21 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
         <p className="text-xs text-brand-grey mt-1">Full CRUD control over all website content. Changes go live once saved.</p>
       </div>
 
-      {contentMessage && (
-        <div className={`p-3 text-xs font-semibold rounded-xl ${
-          contentMessage.includes("success") ? "bg-brand-green/10 text-brand-green" : "bg-[#c24b4b]/10 text-[#c24b4b]"
-        }`}>
-          {contentMessage}
-        </div>
-      )}
+      <AnimatePresence>
+        {contentMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className={`fixed bottom-6 right-6 py-3 px-5 text-sm font-semibold rounded-xl shadow-2xl z-50 flex items-center gap-2 backdrop-blur-md ${
+              contentMessage.includes("success") ? "bg-brand-green/90 text-white" : "bg-[#c24b4b]/90 text-white"
+            }`}
+          >
+            {contentMessage.includes("success") ? <CheckCircle size={18} /> : <X size={18} />}
+            {contentMessage}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ═══════ 1. HERO SLIDES ═══════ */}
       <div className={sectionCardClass}>

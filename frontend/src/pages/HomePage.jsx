@@ -139,13 +139,13 @@ export const HomePage = () => {
           {/* Active Banner Slide */}
           <Link
             to={heroSlides[activeSlide].link}
-            className="block w-full h-full animate-fade-in"
+            className="block w-full h-full animate-fade-in relative group"
             key={activeSlide}
           >
             <img
               src={heroSlides[activeSlide].image}
               alt={heroSlides[activeSlide].title}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               onError={(e) => {
                 // Fallback placeholder showing title if graphic file is not yet generated
                 e.target.src = `https://placehold.co/1200x500/FAF8F5/1C1B19?text=${encodeURIComponent(
@@ -153,6 +153,24 @@ export const HomePage = () => {
                 )}`;
               }}
             />
+            {/* Elegant Text Overlay */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-black/30 md:bg-black/20">
+              {heroSlides[activeSlide].tag && (
+                <span className="text-white/90 text-xs md:text-sm font-bold tracking-[0.2em] uppercase mb-4 md:mb-6 bg-black/20 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
+                  {heroSlides[activeSlide].tag}
+                </span>
+              )}
+              {heroSlides[activeSlide].title && (
+                <h2 className="text-white text-3xl md:text-5xl lg:text-7xl font-serif max-w-4xl leading-tight mb-4 md:mb-6 drop-shadow-lg">
+                  {heroSlides[activeSlide].title}
+                </h2>
+              )}
+              {heroSlides[activeSlide].desc && (
+                <p className="text-white/90 text-sm md:text-lg lg:text-xl max-w-2xl font-light drop-shadow-md">
+                  {heroSlides[activeSlide].desc}
+                </p>
+              )}
+            </div>
           </Link>
 
           {/* Dots Indicator Centered at the Bottom */}
