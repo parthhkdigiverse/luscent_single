@@ -140,7 +140,7 @@ export const ProductPage = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white p-3 rounded-xl border border-brand-card/40 flex items-center gap-2">
                   <div className="w-8 h-8 rounded bg-brand-bg flex items-center justify-center p-1">
-                    <img src={products[0].images[0]} alt="" className="max-h-full object-contain" />
+                    <img src={allProducts.find(p => p.id === "sunscreen")?.images?.[0] || "/images/sunscreen.png"} alt="Sunscreen" className="max-h-full object-contain" />
                   </div>
                   <div className="min-w-0">
                     <h5 className="text-[10px] font-bold text-brand-dark truncate">Ultra Light Sunscreen</h5>
@@ -149,7 +149,7 @@ export const ProductPage = () => {
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-brand-card/40 flex items-center gap-2">
                   <div className="w-8 h-8 rounded bg-brand-bg flex items-center justify-center p-1">
-                    <img src={products[1].images[0]} alt="" className="max-h-full object-contain" />
+                    <img src={allProducts.find(p => p.id === "face-wash")?.images?.[0] || "/images/facewash.png"} alt="Face Wash" className="max-h-full object-contain" />
                   </div>
                   <div className="min-w-0">
                     <h5 className="text-[10px] font-bold text-brand-dark truncate">Bright Skin Face Wash</h5>
