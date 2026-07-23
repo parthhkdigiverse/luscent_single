@@ -17,10 +17,15 @@ export const DataProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const [productsRes, contentRes] = await Promise.all([
-        fetch(`${API_URL}/api/products`, { cache: 'no-store' }),
-        fetch(`${API_URL}/api/content`, { cache: 'no-store' })
+        fetch(`${API_URL}/api/products`, { cache: 'no-store', signal: controller.signal }),
+        fetch(`${API_URL}/api/content`, { cache: 'no-store', signal: controller.signal })
       ]);
+      
+      clearTimeout(timeoutId);
 
       if (productsRes.ok) {
         const productsData = await productsRes.json();
