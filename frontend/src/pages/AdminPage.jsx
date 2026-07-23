@@ -1451,7 +1451,7 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
       }
       
       try {
-        const token = localStorage.getItem("luscent_token");
+        const token = sessionStorage.getItem("luscent_admin_token");
         const res = await fetch(`${API_URL}/api/admin/upload`, {
           method: "POST",
           headers: {

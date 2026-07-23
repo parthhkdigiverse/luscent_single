@@ -629,7 +629,7 @@ UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fro
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.post("/api/admin/upload")
-async def upload_image(file: UploadFile = File(...), replace_path: Optional[str] = Form(None), current_user: dict = Depends(get_current_admin)):
+async def upload_image(file: UploadFile = File(...), replace_path: Optional[str] = Form(None), current_user: dict = Depends(get_admin_user)):
     if replace_path and replace_path.startswith("/images/"):
         file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "public", replace_path.lstrip("/"))
         url = replace_path
