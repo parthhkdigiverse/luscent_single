@@ -1436,18 +1436,40 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   const fileInputRef = React.useRef(null);
   const [showUrlInput, setShowUrlInput] = useState(false);
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
         alert("Image size should be less than 10MB");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        onChange(reader.result);
-      };
-      reader.readAsDataURL(file);
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      if (value && typeof value === "string" && !value.startsWith("data:")) {
+        formData.append("replace_path", value);
+      }
+      
+      try {
+        const token = localStorage.getItem("luscent_token");
+        const res = await fetch(`${API_URL}/api/admin/upload`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
+          body: formData
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          onChange(data.url);
+        } else {
+          alert("Failed to upload image");
+        }
+      } catch (err) {
+        console.error("Upload error:", err);
+        alert("An error occurred during upload");
+      }
     }
   };
 

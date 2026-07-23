@@ -8,7 +8,7 @@ from typing import List, Optional
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
@@ -623,6 +623,24 @@ async def upsert_content_block(section_key: str, body: dict = Body(...), current
         
     return {"message": f"Content block '{section_key}' saved successfully"}
 
+import shutil
+
+UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "public", "images", "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+@app.post("/api/admin/upload")
+async def upload_image(file: UploadFile = File(...), replace_path: Optional[str] = Form(None), current_user: dict = Depends(get_current_admin)):
+    if replace_path and replace_path.startswith("/images/"):
+        file_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "frontend", "public", replace_path.lstrip("/"))
+        url = replace_path
+    else:
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        url = f"/images/uploads/{file.filename}"
+        
+    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+    return {"url": url}
 @app.delete("/api/admin/content/{section_key}")
 async def delete_content_block(section_key: str, current_user: dict = Depends(get_admin_user)):
     """Delete a content block."""
