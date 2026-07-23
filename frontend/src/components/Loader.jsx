@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 
 export const Loader = ({ text = "Loading Luscent Glow..." }) => {
   return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] bg-transparent">
+    <div className="fixed inset-0 flex flex-col items-center justify-center bg-brand-bg/95 backdrop-blur-md z-50">
       {/* Outer Glow Ring */}
       <div className="relative flex items-center justify-center">
         <motion.div

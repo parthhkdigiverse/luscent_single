@@ -1,19 +1,39 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Navigate } from "react-router-dom";
+import { API_URL } from "../config";
 import { ProductCard } from "../components/ProductCard";
 import { ScrollReveal } from "../components/ScrollReveal";
-import { useData } from "../context/DataContext";
-import { Loader } from "../components/Loader";
 
 export const CategoryPage = () => {
   const { categoryName } = useParams();
-  const { products: allProducts, loading } = useData();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const products = allProducts ? allProducts.filter(p => p.category === categoryName) : [];
+  useEffect(() => {
+    const fetchCategoryProducts = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const res = await fetch(`${API_URL}/api/products`, { cache: 'no-store' });
+        if (!res.ok) throw new Error("Failed to load products");
+        const data = await res.json();
+        // Filter products matching category name
+        const filtered = data.filter(p => p.category === categoryName);
+        setProducts(filtered);
+      } catch (err) {
+        console.warn("FastAPI backend failed, falling back to empty category:", err.message);
+        setError("Could not load products. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchCategoryProducts();
+  }, [categoryName]);
 
   // Loading state
   if (loading) {
-    return <Loader />;
+    return <div className="py-32 text-center text-brand-grey text-sm">Loading category products...</div>;
   }
 
   // Smart routing check:

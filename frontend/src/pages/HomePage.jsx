@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight, ShoppingBag, Star, Droplets, Leaf } from "lucide-react";
 import { Loader } from "../components/Loader";
-import { useData } from "../context/DataContext";
 import { testimonials as staticTestimonials } from "../data/testimonials";
 import { faqs as staticFaqs } from "../data/faqs";
 import { Button } from "../components/Button";
@@ -41,13 +40,49 @@ const defaultHeroSlides = [
 ];
 
 export const HomePage = () => {
-  const { products: productList, content: apiContent, loading } = useData();
+  const [productList, setProductList] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingContent, setLoadingContent] = useState(true);
+  const [heroSlides, setHeroSlides] = useState(defaultHeroSlides);
+  const [bannerText, setBannerText] = useState({ title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." });
+  const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
+  const [faqList, setFaqList] = useState(staticFaqs);
 
-  // Fallback to static defaults if not loaded or failed
-  const heroSlides = apiContent?.hero_slides || defaultHeroSlides;
-  const bannerText = apiContent?.homepage_banner || { title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." };
-  const testimonialsList = apiContent?.testimonials || staticTestimonials;
-  const faqList = apiContent?.faq_categories || staticFaqs;
+  useEffect(() => {
+    const loadProducts = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/products`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.length > 0) {
+            setProductList(data);
+          }
+        }
+      } catch (err) {
+        console.warn("FastAPI backend not available:", err.message);
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+    const loadContent = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/content`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.hero_slides) setHeroSlides(data.hero_slides);
+          if (data.homepage_banner) setBannerText(data.homepage_banner);
+          if (data.testimonials) setTestimonialsList(data.testimonials);
+          if (data.faq_categories) setFaqList(data.faq_categories);
+        }
+      } catch (err) {
+        console.warn("Content API not available, using static defaults:", err.message);
+      } finally {
+        setLoadingContent(false);
+      }
+    };
+    loadProducts();
+    loadContent();
+  }, []);
 
   // Extract products
   const sunscreen = productList.find(p => p.id === "sunscreen");
@@ -96,7 +131,9 @@ export const HomePage = () => {
     }
   ];
 
-  if (loading) return <Loader />;
+  if (loadingProducts || loadingContent) {
+    return <Loader />;
+  }
 
   return (
     <div className="pt-20 pb-12 overflow-x-hidden">

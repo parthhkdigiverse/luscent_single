@@ -10,7 +10,7 @@ load_dotenv()
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 DATABASE_NAME = os.getenv("DATABASE_NAME", "luscentglow")
 
-client = AsyncIOMotorClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+client = AsyncIOMotorClient(MONGO_URI)
 db = client[DATABASE_NAME]
 
 def get_database():

@@ -2,7 +2,6 @@ import React, { useEffect } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { CartProvider } from "./context/CartContext";
 import { AuthProvider } from "./context/AuthContext";
-import { DataProvider } from "./context/DataContext";
 import { Navbar } from "./components/Navbar";
 import { Footer } from "./components/Footer";
 import { Newsletter } from "./components/Newsletter";
@@ -74,11 +73,9 @@ export const App = () => {
     <Router>
       <AuthProvider>
         <CartProvider>
-          <DataProvider>
-            <ScrollToTop />
-            <CartToast />
-            <AppContent />
-          </DataProvider>
+          <ScrollToTop />
+          <CartToast />
+          <AppContent />
         </CartProvider>
       </AuthProvider>
     </Router>
