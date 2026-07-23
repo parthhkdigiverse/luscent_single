@@ -2,47 +2,33 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, Shield, Heart, Award } from "lucide-react";
 import { Button } from "../components/Button";
-import { API_URL } from "../config";
 import { Loader } from "../components/Loader";
+import { useData } from "../context/DataContext";
+
+const defaultStory = {
+  title: "Pure Science. Honest Care. Made in India.",
+  subtitle: "We set out to remove the confusion and heavy formulas from daily solar protection and skin barrier repair.",
+  manifesto_image: "/images/manifesto_banner.png",
+  manifesto_tag: "OUR MANIFESTO",
+  manifesto_text: "Formulating skin barrier protection that feels absolutely weightless.",
+  founder_title: "Why we started Luscent Glow",
+  founder_text: "skinceutical solutions in India are often split between two extremes: heavy, oily sunscreen blocks that clog pores, or harsh chemical washes that dry out the skin barrier entirely.\n\nLuscent Glow was created to strike the perfect balance: **\"Powerful Protection. Effective Gentle Care.\"** We wanted to engineer a hybrid mineral sunscreen that is completely weightless in hot summers, hydrates like a moisturizer, and leaves absolutely no white cast.\n\nBy working with elite formulation scientists, we designed our sunscreen and face wash using clinical-grade active ingredients like **Niacinamide, Salicylic Acid, and Alpha Arbutin**. We choose safety, transparency, and results over marketing buzzwords.",
+  mfg_tag: "PROUDLY MADE IN INDIA",
+  mfg_title: "Clinical Precision at Basilica Biotech, Surat",
+  mfg_text: "Every batch of Luscent Glow products is formulated, tested, and bottled at **Basilica Biotech**, located in the industrial hub of **Surat, Gujarat, India**.\n\nBy manufacturing locally under world-class clinical conditions, we eliminate heavy import taxes and middlemen. This allows us to deliver high-potency, dermatologist-grade actives directly to you at honest, affordable prices.",
+  mfg_image: "/images/production_facility.png",
+  values_title: "Skincare Without Compromise",
+  values: [
+    { title: "Effective, Gentle Formulations", desc: "We never use drying alcohols, synthetic sulfates, or artificial fragrances. Our active acids work gently in harmony with your skin's natural pH." },
+    { title: "Dermatologist Friendly", desc: "Tested extensively on all skin types. Our formulas prioritize lipid barrier repair to prevent redness, acne flare-ups, and irritations." },
+    { title: "Honest Ingredients", desc: "No hidden chemical blocks or placeholder fillers. We list every single element of our sunscreen and face wash clearly, right on the front label." }
+  ]
+};
 
 export const OurStoryPage = ({ previewData }) => {
-  const [ourStory, setOurStory] = useState({
-    title: "Pure Science. Honest Care. Made in India.",
-    subtitle: "We set out to remove the confusion and heavy formulas from daily solar protection and skin barrier repair.",
-    manifesto_image: "/images/manifesto_banner.png",
-    manifesto_tag: "OUR MANIFESTO",
-    manifesto_text: "Formulating skin barrier protection that feels absolutely weightless.",
-    founder_title: "Why we started Luscent Glow",
-    founder_text: "skinceutical solutions in India are often split between two extremes: heavy, oily sunscreen blocks that clog pores, or harsh chemical washes that dry out the skin barrier entirely.\n\nLuscent Glow was created to strike the perfect balance: **\"Powerful Protection. Effective Gentle Care.\"** We wanted to engineer a hybrid mineral sunscreen that is completely weightless in hot summers, hydrates like a moisturizer, and leaves absolutely no white cast.\n\nBy working with elite formulation scientists, we designed our sunscreen and face wash using clinical-grade active ingredients like **Niacinamide, Salicylic Acid, and Alpha Arbutin**. We choose safety, transparency, and results over marketing buzzwords.",
-    mfg_tag: "PROUDLY MADE IN INDIA",
-    mfg_title: "Clinical Precision at Basilica Biotech, Surat",
-    mfg_text: "Every batch of Luscent Glow products is formulated, tested, and bottled at **Basilica Biotech**, located in the industrial hub of **Surat, Gujarat, India**.\n\nBy manufacturing locally under world-class clinical conditions, we eliminate heavy import taxes and middlemen. This allows us to deliver high-potency, dermatologist-grade actives directly to you at honest, affordable prices.",
-    mfg_image: "/images/production_facility.png",
-    values_title: "Skincare Without Compromise",
-    values: [
-      { title: "Effective, Gentle Formulations", desc: "We never use drying alcohols, synthetic sulfates, or artificial fragrances. Our active acids work gently in harmony with your skin's natural pH." },
-      { title: "Dermatologist Friendly", desc: "Tested extensively on all skin types. Our formulas prioritize lipid barrier repair to prevent redness, acne flare-ups, and irritations." },
-      { title: "Honest Ingredients", desc: "No hidden chemical blocks or placeholder fillers. We list every single element of our sunscreen and face wash clearly, right on the front label." }
-    ]
-  });
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (previewData) {
-      setOurStory(prev => ({ ...prev, ...previewData }));
-      return;
-    }
-    fetch(`${API_URL}/api/content/our_story`, { cache: 'no-store' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && data.content) {
-          // Merge with defaults to ensure all fields exist
-          setOurStory(prev => ({ ...prev, ...data.content }));
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [previewData]);
+  const { content: apiContent, loading } = useData();
+  
+  const ourStory = previewData || { ...defaultStory, ...apiContent?.our_story };
 
   if (loading && !previewData) {
     return <Loader text="Loading Our Story..." />;

@@ -8,45 +8,28 @@ import { BenefitBadge } from "../components/BenefitBadge";
 import { HowToUseSteps } from "../components/HowToUseSteps";
 import { IngredientAccordion } from "../components/IngredientAccordion";
 import { useCart } from "../context/CartContext";
-import { API_URL } from "../config";
+import { useData } from "../context/DataContext";
+import { Loader } from "../components/Loader";
 
 export const ProductPage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { addToCart } = useCart();
-  const [product, setProduct] = useState(null);
-  const [allProducts, setAllProducts] = useState([]);
+  const { products: allProducts, loading } = useData();
+
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
 
   useEffect(() => {
-    const loadProduct = async () => {
-      try {
-        const [resProduct, resAll] = await Promise.all([
-          fetch(`${API_URL}/api/products/${slug}`, { cache: 'no-store' }),
-          fetch(`${API_URL}/api/products`, { cache: 'no-store' })
-        ]);
-        
-        if (!resProduct.ok) throw new Error("Failed to fetch product");
-        const data = await resProduct.json();
-        setProduct(data);
-        
-        if (resAll.ok) {
-          const allData = await resAll.json();
-          setAllProducts(allData);
-        }
-      } catch (err) {
-        console.warn("FastAPI backend not available:", err.message);
-        navigate("/");
-      }
-    };
-    loadProduct();
     setQuantity(1);
     setActiveTab("description");
-  }, [slug, navigate]);
+  }, [slug]);
 
-  if (!product) return <div className="py-32 text-center text-brand-grey text-sm">Loading...</div>;
+  if (loading) return <Loader />;
+
+  const product = allProducts?.find(p => p.id === slug || p.slug === slug);
+  if (!product) return <div className="py-32 text-center text-brand-grey text-sm">Product not found.</div>;
 
   const isCombo = product.id === "combo";
   const crossSells = allProducts.filter((p) => p.id !== product.id);

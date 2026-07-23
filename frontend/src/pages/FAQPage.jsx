@@ -2,25 +2,14 @@ import React, { useState, useEffect } from "react";
 import { faqs as staticFaqs } from "../data/faqs";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { HelpCircle, Search } from "lucide-react";
-import { API_URL } from "../config";
 import { Loader } from "../components/Loader";
+import { useData } from "../context/DataContext";
 
 export const FAQPage = () => {
   const [searchTerm, setSearchTerm] = useState("");
-  const [faqList, setFaqList] = useState(staticFaqs);
-  const [loading, setLoading] = useState(true);
+  const { content: apiContent, loading } = useData();
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/content/faq_categories`, { cache: 'no-store' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && data.content) {
-          setFaqList(data.content);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const faqList = apiContent?.faq_categories || staticFaqs;
 
   if (loading) {
     return <Loader text="Loading FAQs..." />;

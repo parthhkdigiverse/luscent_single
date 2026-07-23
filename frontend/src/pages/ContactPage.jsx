@@ -3,6 +3,7 @@ import { Phone, Mail, MapPin, Send, CheckCircle2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { API_URL } from "../config";
 import { Loader } from "../components/Loader";
+import { useData } from "../context/DataContext";
 
 export const ContactPage = () => {
   const [name, setName] = useState("");
@@ -10,28 +11,13 @@ export const ContactPage = () => {
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const [settings, setSettings] = useState({
-    contact_email: "theluscentglow@gmail.com",
-    contact_phone: "+91 63521 63607",
-    contact_address: "Basilica Biotech, Surat, Gujarat, India."
-  });
-  const [loading, setLoading] = useState(true);
+  const { content: apiContent, loading } = useData();
 
-  useEffect(() => {
-    fetch(`${API_URL}/api/content/contact_info`, { cache: 'no-store' })
-      .then(res => res.ok ? res.json() : null)
-      .then(data => {
-        if (data && data.content) {
-          setSettings({
-            contact_email: data.content.email || "theluscentglow@gmail.com",
-            contact_phone: data.content.phone || "+91 63521 63607",
-            contact_address: data.content.address || "Basilica Biotech, Surat, Gujarat, India."
-          });
-        }
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
+  const settings = {
+    contact_email: apiContent?.contact_info?.email || "theluscentglow@gmail.com",
+    contact_phone: apiContent?.contact_info?.phone || "+91 63521 63607",
+    contact_address: apiContent?.contact_info?.address || "Basilica Biotech, Surat, Gujarat, India."
+  };
 
   if (loading) {
     return <Loader text="Loading Contact Info..." />;
