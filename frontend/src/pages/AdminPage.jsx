@@ -52,7 +52,9 @@ export const AdminPage = () => {
   const [cashfreeAppId, setCashfreeAppId] = useState("");
   const [cashfreeSecretKey, setCashfreeSecretKey] = useState("");
   const [cashfreeEnv, setCashfreeEnv] = useState("sandbox");
+  const [showCashfreeSecret, setShowCashfreeSecret] = useState(false);
   const [delhiveryApiToken, setDelhiveryApiToken] = useState("");
+  const [showDelhiveryToken, setShowDelhiveryToken] = useState(false);
   const [delhiveryEnv, setDelhiveryEnv] = useState("sandbox");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
@@ -928,13 +930,22 @@ export const AdminPage = () => {
 
                     <div>
                       <label className="font-semibold block mb-1 text-xs text-brand-dark">Cashfree Secret Key</label>
-                      <input
-                        type="password"
-                        value={cashfreeSecretKey}
-                        onChange={(e) => setCashfreeSecretKey(e.target.value)}
-                        placeholder="••••••••••••••••••••••••••••••••"
-                        className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showCashfreeSecret ? "text" : "password"}
+                          value={cashfreeSecretKey}
+                          onChange={(e) => setCashfreeSecretKey(e.target.value)}
+                          placeholder="••••••••••••••••••••••••••••••••"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs pr-16"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCashfreeSecret(!showCashfreeSecret)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-brand-grey hover:text-brand-dark"
+                        >
+                          {showCashfreeSecret ? "Hide" : "View"}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -945,13 +956,22 @@ export const AdminPage = () => {
                     <div className="grid grid-cols-2 gap-4">
                       <div>
                         <label className="font-semibold block mb-1 text-xs text-brand-dark">Delhivery API Token</label>
-                        <input
-                          type="password"
-                          value={delhiveryApiToken}
-                          onChange={(e) => setDelhiveryApiToken(e.target.value)}
-                          placeholder="••••••••••••••••••••••••"
-                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
-                        />
+                        <div className="relative">
+                          <input
+                            type={showDelhiveryToken ? "text" : "password"}
+                            value={delhiveryApiToken}
+                            onChange={(e) => setDelhiveryApiToken(e.target.value)}
+                            placeholder="••••••••••••••••••••••••"
+                            className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs pr-16"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowDelhiveryToken(!showDelhiveryToken)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-brand-grey hover:text-brand-dark"
+                          >
+                            {showDelhiveryToken ? "Hide" : "View"}
+                          </button>
+                        </div>
                       </div>
                       <div>
                         <label className="font-semibold block mb-1 text-xs text-brand-dark">Delhivery API Mode</label>
