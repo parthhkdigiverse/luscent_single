@@ -65,6 +65,7 @@ export const AdminPage = () => {
   // Loading & Error States
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [imgCacheBust, setImgCacheBust] = useState(Date.now());
 
   // Product Form Dialog State
   const [showProductModal, setShowProductModal] = useState(false);
@@ -141,6 +142,7 @@ export const AdminPage = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     setError("");
+    setImgCacheBust(Date.now());
     try {
       let backendStats = { users: 0, products: 0, orders: 0, revenue: 0 };
       let apiOrders = [];
@@ -774,7 +776,7 @@ export const AdminPage = () => {
                   {productsList.map(p => (
                     <div key={p.id} className="border border-brand-card/40 rounded-2xl p-4 flex gap-4 bg-brand-bg/10 hover:border-brand-card transition shadow-sm">
                       <div className="w-16 h-16 rounded-xl bg-white overflow-hidden border border-brand-card/30 flex-shrink-0">
-                        <img src={p.images?.[0] || "/images/sunscreen.png"} alt={p.name} className="w-full h-full object-cover" />
+                        <img src={p.images?.[0] ? `${p.images[0]}?v=${imgCacheBust}` : `/images/sunscreen.png?v=${imgCacheBust}`} alt={p.name} className="w-full h-full object-cover" />
                       </div>
                       <div className="flex-1 min-w-0 text-left">
                         <h4 className="font-serif text-sm font-semibold text-brand-dark truncate">{p.name}</h4>
@@ -1435,6 +1437,7 @@ const sectionTitleClass = "font-serif text-sm font-semibold text-brand-dark bord
 const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   const fileInputRef = React.useRef(null);
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [localCacheBust, setLocalCacheBust] = useState(Date.now());
 
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -1463,6 +1466,7 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
         if (res.ok) {
           const data = await res.json();
           onChange(data.url);
+          setLocalCacheBust(Date.now());
         } else {
           alert("Failed to upload image");
         }
@@ -1498,7 +1502,7 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
         <div className="p-3 bg-white border border-brand-card/40 rounded-xl flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 overflow-hidden">
             <img
-              src={value}
+              src={value.startsWith("data:") ? value : `${value}?v=${localCacheBust}`}
               alt="Slide preview"
               className="w-14 h-14 object-cover rounded-lg border border-brand-card/30 flex-shrink-0"
               onError={(e) => { e.target.onerror = null; e.target.src = "https://placehold.co/100x100?text=Preview+Error"; }}
