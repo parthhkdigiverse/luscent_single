@@ -139,7 +139,7 @@ export const HomePage = () => {
     <div className="pt-20 pb-12 overflow-x-hidden">
       {/* 1. Full-Screen Widescreen Hero Banner (Slideshow) */}
       <section className="w-full">
-        <div className="relative w-full overflow-hidden h-[calc(100vh-5rem)] min-h-[500px] bg-brand-bg">
+        <div className="relative w-full overflow-hidden aspect-[16/9] md:aspect-auto md:h-[calc(100vh-5rem)] min-h-[250px] md:min-h-[500px] bg-brand-bg">
           {/* Active Banner Slide */}
           <Link
             to={heroSlides[activeSlide].link}
@@ -149,7 +149,7 @@ export const HomePage = () => {
             <img
               src={heroSlides[activeSlide].image}
               alt={heroSlides[activeSlide].title}
-              className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              className="w-full h-full object-contain md:object-cover transition-transform duration-700 group-hover:scale-105"
               onError={(e) => {
                 // Fallback placeholder showing title if graphic file is not yet generated
                 e.target.src = `https://placehold.co/1200x500/FAF8F5/1C1B19?text=${encodeURIComponent(
