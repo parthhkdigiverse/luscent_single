@@ -50,6 +50,8 @@ export const ProductPage = () => {
 
   const isCombo = product.id === "combo";
   const crossSells = allProducts.filter((p) => p.id !== product.id);
+  const comboSunscreen = allProducts.find((p) => p.id === "sunscreen");
+  const comboFaceWash = allProducts.find((p) => p.id === "face-wash");
 
   const handleAddToCart = () => {
     addToCart(product, quantity);
@@ -140,7 +142,7 @@ export const ProductPage = () => {
               <div className="grid grid-cols-2 gap-3">
                 <div className="bg-white p-3 rounded-xl border border-brand-card/40 flex items-center gap-2">
                   <div className="w-8 h-8 rounded bg-brand-bg flex items-center justify-center p-1">
-                    <img src={products[0].images[0]} alt="" className="max-h-full object-contain" />
+                    <img src={comboSunscreen?.images?.[0]} alt="" className="max-h-full object-contain" />
                   </div>
                   <div className="min-w-0">
                     <h5 className="text-[10px] font-bold text-brand-dark truncate">Ultra Light Sunscreen</h5>
@@ -149,7 +151,7 @@ export const ProductPage = () => {
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-brand-card/40 flex items-center gap-2">
                   <div className="w-8 h-8 rounded bg-brand-bg flex items-center justify-center p-1">
-                    <img src={products[1].images[0]} alt="" className="max-h-full object-contain" />
+                    <img src={comboFaceWash?.images?.[0]} alt="" className="max-h-full object-contain" />
                   </div>
                   <div className="min-w-0">
                     <h5 className="text-[10px] font-bold text-brand-dark truncate">Bright Skin Face Wash</h5>
