@@ -180,28 +180,14 @@ export const AdminPage = () => {
         setUsersList(apiUsers);
       }
 
-      // Load local test orders from localStorage as well
-      let localOrders = [];
-      try {
-        localOrders = JSON.parse(localStorage.getItem("luscent_orders") || "[]");
-      } catch (e) {
-        console.error("Error parsing local test orders:", e);
-      }
-
-      // Combine API orders and local orders (deduplicating by order_number)
-      const orderMap = new Map();
-      apiOrders.forEach(ord => {
-        if (ord.order_number) orderMap.set(ord.order_number, ord);
-      });
-      localOrders.forEach(ord => {
-        if (ord.order_number && !orderMap.has(ord.order_number)) {
-          orderMap.set(ord.order_number, ord);
-        }
-      });
-
-      const mergedOrders = Array.from(orderMap.values());
-      mergedOrders.sort((a, b) => new Date(b.created_at || Date.now()) - new Date(a.created_at || Date.now()));
-      setOrders(mergedOrders);
+      let mergedOrders = apiOrders;
+      
+      // Merge order users with auth users for search compatibility
+      const enhancedOrders = mergedOrders.map(o => {
+        const orderUser = apiUsers.find(u => u.email === o.email || (o.user_id && u._id === o.user_id));
+        return { ...o, user_data: orderUser };
+      }).sort((a, b) => new Date(b.created_at || Date.now()) - new Date(a.created_at || Date.now()));
+      setOrders(enhancedOrders);
 
       // Compute dynamic revenue and order metrics
       const totalRevenue = mergedOrders.reduce((sum, ord) => sum + (Number(ord.totalPrice) || 0), 0);
@@ -212,9 +198,12 @@ export const AdminPage = () => {
       const activeUsersCount = Math.max(apiUsers.length, backendStats.users || 0, uniqueUserEmails.size);
 
       setStats({
+        ...backendStats,
         revenue: totalRevenue,
-        orders: mergedOrders.length,
+        orders: mergedOrders.filter(o => !o.is_deleted).length,
+        deleted_orders: mergedOrders.filter(o => o.is_deleted).length || backendStats.deleted_orders || 0,
         users: activeUsersCount,
+        deleted_users: backendStats.deleted_users || 0,
         products: apiProducts.length || backendStats.products || 0
       });
 
