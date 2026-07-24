@@ -742,9 +742,30 @@ async def get_admin_settings(current_user: dict = Depends(get_admin_user)):
             "cashfree_env": "sandbox",
             "delhivery_api_token": "",
             "delhivery_env": "sandbox",
-            "delhivery_warehouse": "Luscentglow Warehouse"
+            "delhivery_warehouse": "Luscentglow Warehouse",
+            "social_instagram": "",
+            "social_facebook": "",
+            "social_twitter": "",
+            "social_youtube": ""
         }
     return settings
+
+@app.get("/api/settings/public")
+async def get_public_settings():
+    settings = await settings_collection.find_one({})
+    if not settings:
+        return {
+            "social_instagram": "",
+            "social_facebook": "",
+            "social_twitter": "",
+            "social_youtube": ""
+        }
+    return {
+        "social_instagram": settings.get("social_instagram", ""),
+        "social_facebook": settings.get("social_facebook", ""),
+        "social_twitter": settings.get("social_twitter", ""),
+        "social_youtube": settings.get("social_youtube", "")
+    }
 
 @app.post("/api/admin/settings")
 async def save_admin_settings(body: SettingsBase, current_user: dict = Depends(get_admin_user)):

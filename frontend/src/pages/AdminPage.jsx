@@ -59,6 +59,10 @@ export const AdminPage = () => {
   const [showDelhiveryToken, setShowDelhiveryToken] = useState(false);
   const [delhiveryEnv, setDelhiveryEnv] = useState("sandbox");
   const [delhiveryWarehouse, setDelhiveryWarehouse] = useState("Luscentglow Warehouse");
+  const [socialInstagram, setSocialInstagram] = useState("");
+  const [socialFacebook, setSocialFacebook] = useState("");
+  const [socialTwitter, setSocialTwitter] = useState("");
+  const [socialYoutube, setSocialYoutube] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
@@ -224,6 +228,10 @@ export const AdminPage = () => {
         setDelhiveryApiToken(settingsData.delhivery_api_token || "");
         setDelhiveryEnv(settingsData.delhivery_env || "sandbox");
         setDelhiveryWarehouse(settingsData.delhivery_warehouse || "Luscentglow Warehouse");
+        setSocialInstagram(settingsData.social_instagram || "");
+        setSocialFacebook(settingsData.social_facebook || "");
+        setSocialTwitter(settingsData.social_twitter || "");
+        setSocialYoutube(settingsData.social_youtube || "");
       }
 
       // CMS Content Blocks
@@ -461,7 +469,11 @@ export const AdminPage = () => {
       cashfree_env: cashfreeEnv,
       delhivery_api_token: delhiveryApiToken,
       delhivery_env: delhiveryEnv,
-      delhivery_warehouse: delhiveryWarehouse
+      delhivery_warehouse: delhiveryWarehouse,
+      social_instagram: socialInstagram,
+      social_facebook: socialFacebook,
+      social_twitter: socialTwitter,
+      social_youtube: socialYoutube
     };
 
     try {
@@ -1100,6 +1112,54 @@ export const AdminPage = () => {
                           className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
                         />
                         <p className="text-[10px] text-brand-grey mt-1">Must exactly match the pickup location name registered in your Delhivery account.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Social Media Links Segment */}
+                  <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4">
+                    <h4 className="font-serif text-sm font-semibold text-brand-dark border-b border-brand-card/30 pb-2">Social Media Links</h4>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Instagram URL</label>
+                        <input
+                          type="url"
+                          value={socialInstagram}
+                          onChange={(e) => setSocialInstagram(e.target.value)}
+                          placeholder="https://instagram.com/luscentglow"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Facebook URL</label>
+                        <input
+                          type="url"
+                          value={socialFacebook}
+                          onChange={(e) => setSocialFacebook(e.target.value)}
+                          placeholder="https://facebook.com/luscentglow"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Twitter / X URL</label>
+                        <input
+                          type="url"
+                          value={socialTwitter}
+                          onChange={(e) => setSocialTwitter(e.target.value)}
+                          placeholder="https://twitter.com/luscentglow"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">YouTube URL</label>
+                        <input
+                          type="url"
+                          value={socialYoutube}
+                          onChange={(e) => setSocialYoutube(e.target.value)}
+                          placeholder="https://youtube.com/@luscentglow"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
                       </div>
                     </div>
                   </div>

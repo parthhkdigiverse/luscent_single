@@ -179,6 +179,10 @@ class SettingsBase(BaseModel):
     delhivery_api_token: str
     delhivery_env: str = "sandbox"  # sandbox or production
     delhivery_warehouse: Optional[str] = "Luscentglow Warehouse"
+    social_instagram: Optional[str] = ""
+    social_facebook: Optional[str] = ""
+    social_twitter: Optional[str] = ""
+    social_youtube: Optional[str] = ""
 
 class SettingsResponse(SettingsBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
