@@ -56,6 +56,7 @@ export const AdminPage = () => {
   const [delhiveryApiToken, setDelhiveryApiToken] = useState("");
   const [showDelhiveryToken, setShowDelhiveryToken] = useState(false);
   const [delhiveryEnv, setDelhiveryEnv] = useState("sandbox");
+  const [delhiveryWarehouse, setDelhiveryWarehouse] = useState("Luscentglow Warehouse");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
@@ -231,6 +232,7 @@ export const AdminPage = () => {
         setCashfreeEnv(settingsData.cashfree_env || "sandbox");
         setDelhiveryApiToken(settingsData.delhivery_api_token || "");
         setDelhiveryEnv(settingsData.delhivery_env || "sandbox");
+        setDelhiveryWarehouse(settingsData.delhivery_warehouse || "Luscentglow Warehouse");
       }
 
       // CMS Content Blocks
@@ -256,9 +258,12 @@ export const AdminPage = () => {
       if (res.ok) {
         setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
         fetchDashboardData(); // Refresh to get Delhivery AWB tracking number
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Error updating order status");
       }
     } catch (err) {
-      alert("Error updating order status");
+      alert("Error connecting to server");
     }
   };
 
@@ -416,7 +421,8 @@ export const AdminPage = () => {
       cashfree_secret_key: cashfreeSecretKey,
       cashfree_env: cashfreeEnv,
       delhivery_api_token: delhiveryApiToken,
-      delhivery_env: delhiveryEnv
+      delhivery_env: delhiveryEnv,
+      delhivery_warehouse: delhiveryWarehouse
     };
 
     try {
@@ -983,6 +989,17 @@ export const AdminPage = () => {
                           <option value="sandbox">Sandbox (Staging)</option>
                           <option value="production">Production (Live)</option>
                         </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Delhivery Warehouse Name</label>
+                        <input
+                          type="text"
+                          value={delhiveryWarehouse}
+                          onChange={(e) => setDelhiveryWarehouse(e.target.value)}
+                          placeholder="e.g. Luscentglow Warehouse"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
+                        <p className="text-[10px] text-brand-grey mt-1">Must exactly match the pickup location name registered in your Delhivery account.</p>
                       </div>
                     </div>
                   </div>

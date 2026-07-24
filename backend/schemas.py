@@ -176,6 +176,7 @@ class SettingsBase(BaseModel):
     cashfree_env: str = "sandbox"  # sandbox or production
     delhivery_api_token: str
     delhivery_env: str = "sandbox"  # sandbox or production
+    delhivery_warehouse: Optional[str] = "Luscentglow Warehouse"
 
 class SettingsResponse(SettingsBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)

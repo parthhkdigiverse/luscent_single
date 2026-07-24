@@ -400,20 +400,18 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
     if not status_val:
         raise HTTPException(status_code=400, detail="Status value required")
     
-    result = await orders_collection.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": {"status": status_val}}
-    )
-    if result.matched_count == 0:
+    # Check if order exists first
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
         
     # If shipping, trigger Delhivery shipment booking
     if status_val == "shipped":
-        order = await orders_collection.find_one({"_id": ObjectId(order_id)})
         if order:
             db_settings = await settings_collection.find_one({})
             delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
             delhivery_env = db_settings.get("delhivery_env", "sandbox") if db_settings else "sandbox"
+            delhivery_warehouse = db_settings.get("delhivery_warehouse", "Luscentglow Warehouse") if db_settings else "Luscentglow Warehouse"
             
             awb = None
             if delhivery_token and delhivery_token != "mock_token":
@@ -432,11 +430,12 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                             "pin": order.get("pincode"),
                             "payment_mode": "COD" if order.get("paymentMethod") == "cod" else "Prepaid",
                             "order": order.get("order_number"),
-                            "amount": order.get("totalPrice")
+                            "amount": order.get("totalPrice"),
+                            "cod_amount": order.get("totalPrice") if order.get("paymentMethod") == "cod" else 0
                         }
                     ],
                     "pickup_location": {
-                        "name": "Luscentglow Warehouse"
+                        "name": delhivery_warehouse
                     }
                 }
                 
@@ -450,13 +449,35 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                         )
                         if response.status_code == 200:
                             res_json = response.json()
+                            
+                            # Delhivery API might return 200 OK but with an error flag inside the JSON
+                            if not res_json.get("success", True) or "error" in res_json:
+                                error_msg = res_json.get("error")
+                                if not error_msg:
+                                    import json as json_lib
+                                    error_msg = json_lib.dumps(res_json)
+                                raise HTTPException(status_code=400, detail=f"Delhivery Booking Failed: {error_msg}")
+                                
                             packages = res_json.get("packages", [])
                             if packages:
+                                # Sometimes package status might indicate error
+                                if packages[0].get("status") == "Fail":
+                                    err_msg = packages[0].get("remarks", ["Unknown error"])[0]
+                                    raise HTTPException(status_code=400, detail=f"Delhivery Booking Failed: {err_msg}")
+                                    
                                 awb = packages[0].get("waybill")
+                        else:
+                            # HTTP error from Delhivery
+                            err_text = response.text
+                            raise HTTPException(status_code=400, detail=f"Delhivery API Error ({response.status_code}): {err_text}")
+                            
+                except HTTPException:
+                    raise  # Re-raise HTTP exceptions to bubble up to the client
                 except Exception as e:
                     print("Delhivery Booking Error:", str(e))
+                    raise HTTPException(status_code=500, detail=f"Failed to connect to Delhivery API: {str(e)}")
             
-            # Fallback AWB if booking fails or is mock
+            # Fallback AWB if mock token
             if not awb:
                 awb = "DLV" + "".join([str(random.randint(0, 9)) for _ in range(10)])
                 
@@ -464,6 +485,12 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                 {"_id": ObjectId(order_id)},
                 {"$set": {"tracking_number": awb, "carrier": "Delhivery"}}
             )
+            
+    # Finally, update the status in DB now that shipping hasn't thrown an error
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"status": status_val}}
+    )
             
     return {"message": "Status updated successfully"}
 
@@ -659,7 +686,8 @@ async def get_admin_settings(current_user: dict = Depends(get_admin_user)):
             "cashfree_secret_key": "",
             "cashfree_env": "sandbox",
             "delhivery_api_token": "",
-            "delhivery_env": "sandbox"
+            "delhivery_env": "sandbox",
+            "delhivery_warehouse": "Luscentglow Warehouse"
         }
     return settings
 
