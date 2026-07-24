@@ -29,6 +29,7 @@ class UserCreate(UserBase):
 class UserResponse(UserBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    is_deleted: bool = False
 
     class Config:
         populate_by_name = True
@@ -127,6 +128,7 @@ class OrderResponse(OrderCreate):
     user_id: Optional[str] = None
     status: str = "pending"
     created_at: datetime
+    is_deleted: bool = False
 
     class Config:
         populate_by_name = True

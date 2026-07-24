@@ -359,12 +359,17 @@ async def create_contact(contact_in: ContactCreate):
 # --- Admin Routes ---
 @app.get("/api/admin/stats")
 async def get_admin_stats(current_user: dict = Depends(get_admin_user)):
-    users_count = await users_collection.count_documents({})
+    users_count = await users_collection.count_documents({"is_deleted": {"$ne": True}})
+    deleted_users_count = await users_collection.count_documents({"is_deleted": True})
     products_count = await products_collection.count_documents({})
-    orders_count = await orders_collection.count_documents({})
+    orders_count = await orders_collection.count_documents({"is_deleted": {"$ne": True}})
+    deleted_orders_count = await orders_collection.count_documents({"is_deleted": True})
     
     # Calculate revenue
-    pipeline = [{"$group": {"_id": None, "total": {"$sum": "$totalPrice"}}}]
+    pipeline = [
+        {"$match": {"is_deleted": {"$ne": True}}},
+        {"$group": {"_id": None, "total": {"$sum": "$totalPrice"}}}
+    ]
     cursor = orders_collection.aggregate(pipeline)
     total_revenue = 0
     async for result in cursor:
@@ -372,8 +377,10 @@ async def get_admin_stats(current_user: dict = Depends(get_admin_user)):
         
     return {
         "users": users_count,
+        "deleted_users": deleted_users_count,
         "products": products_count,
         "orders": orders_count,
+        "deleted_orders": deleted_orders_count,
         "revenue": round(float(total_revenue or 0), 2)
     }
 
@@ -385,6 +392,30 @@ async def get_admin_users(current_user: dict = Depends(get_admin_user)):
         users.append(document)
     return users
 
+@app.put("/api/admin/users/{user_id}/soft-delete")
+async def soft_delete_admin_user(user_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": {"is_deleted": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User soft deleted successfully"}
+
+@app.put("/api/admin/users/{user_id}/restore")
+async def restore_admin_user(user_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await users_collection.update_one({"_id": ObjectId(user_id)}, {"$set": {"is_deleted": False}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User restored successfully"}
+
+@app.delete("/api/admin/users/{user_id}")
+async def hard_delete_admin_user(user_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await users_collection.delete_one({"_id": ObjectId(user_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"message": "User permanently deleted"}
+
 @app.get("/api/admin/orders", response_model=List[OrderResponse])
 async def get_admin_orders(current_user: dict = Depends(get_admin_user)):
     cursor = orders_collection.find({})
@@ -392,6 +423,30 @@ async def get_admin_orders(current_user: dict = Depends(get_admin_user)):
     async for document in cursor:
         orders.append(document)
     return orders
+
+@app.put("/api/admin/orders/{order_id}/soft-delete")
+async def soft_delete_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$set": {"is_deleted": True}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order soft deleted successfully"}
+
+@app.put("/api/admin/orders/{order_id}/restore")
+async def restore_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$set": {"is_deleted": False}})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order restored successfully"}
+
+@app.delete("/api/admin/orders/{order_id}")
+async def hard_delete_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    result = await orders_collection.delete_one({"_id": ObjectId(order_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order permanently deleted"}
 
 @app.put("/api/admin/orders/{order_id}/status")
 async def update_order_status(order_id: str, body: OrderStatusUpdate, current_user: dict = Depends(get_admin_user)):

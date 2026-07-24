@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
-  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff
+  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -27,10 +27,12 @@ export const AdminPage = () => {
   const setActiveTab = (tabVal) => {
     setSearchParams({ tab: tabVal });
   };
-  const [stats, setStats] = useState({ users: 0, products: 0, orders: 0, revenue: 0 });
+  const [stats, setStats] = useState({ users: 0, deleted_users: 0, products: 0, orders: 0, deleted_orders: 0, revenue: 0 });
   const [orders, setOrders] = useState([]);
+  const [showDeletedOrders, setShowDeletedOrders] = useState(false);
   const [productsList, setProductsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
+  const [showDeletedUsers, setShowDeletedUsers] = useState(false);
   const [couponsList, setCouponsList] = useState([]);
 
   // Coupon Dialog State
@@ -256,7 +258,7 @@ export const AdminPage = () => {
         body: JSON.stringify({ status: newStatus })
       });
       if (res.ok) {
-        setOrders(prev => prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o));
+        setOrders(prev => prev.map(o => (o.id || o._id) === orderId ? { ...o, status: newStatus } : o));
         fetchDashboardData(); // Refresh to get Delhivery AWB tracking number
       } else {
         const errData = await res.json().catch(() => ({}));
@@ -265,6 +267,54 @@ export const AdminPage = () => {
     } catch (err) {
       alert("Error connecting to server");
     }
+  };
+
+  const handleSoftDeleteOrder = async (orderId) => {
+    if (!window.confirm("Move this order to trash?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/soft-delete`, { method: "PUT" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error deleting order"); }
+  };
+  
+  const handleRestoreOrder = async (orderId) => {
+    if (!window.confirm("Restore this order?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/restore`, { method: "PUT" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error restoring order"); }
+  };
+  
+  const handleHardDeleteOrder = async (orderId) => {
+    if (!window.confirm("Permanently delete this order? This cannot be undone!")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}`, { method: "DELETE" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error deleting order"); }
+  };
+  
+  const handleSoftDeleteUser = async (userId) => {
+    if (!window.confirm("Move this user to trash?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/users/${userId}/soft-delete`, { method: "PUT" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error deleting user"); }
+  };
+  
+  const handleRestoreUser = async (userId) => {
+    if (!window.confirm("Restore this user?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/users/${userId}/restore`, { method: "PUT" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error restoring user"); }
+  };
+  
+  const handleHardDeleteUser = async (userId) => {
+    if (!window.confirm("Permanently delete this user? This cannot be undone!")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/users/${userId}`, { method: "DELETE" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) { alert("Error deleting user"); }
   };
 
   const handleEditProductClick = (p) => {
@@ -634,7 +684,10 @@ export const AdminPage = () => {
               </div>
               <div>
                 <span className="text-[10px] uppercase font-bold tracking-wider text-brand-grey">Total Orders</span>
-                <h3 className="font-serif text-xl font-semibold text-brand-dark mt-0.5">{stats.orders}</h3>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <h3 className="font-serif text-xl font-semibold text-brand-dark">{stats.orders} <span className="text-xs font-sans text-brand-grey font-normal">Active</span></h3>
+                  <span className="text-xs text-red-400 font-medium">| {stats.deleted_orders || 0} Deleted</span>
+                </div>
               </div>
             </div>
 
@@ -643,8 +696,11 @@ export const AdminPage = () => {
                 <Users size={20} />
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider text-brand-grey">Active Users</span>
-                <h3 className="font-serif text-xl font-semibold text-brand-dark mt-0.5">{stats.users}</h3>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-brand-grey">Total Users</span>
+                <div className="flex items-baseline gap-2 mt-0.5">
+                  <h3 className="font-serif text-xl font-semibold text-brand-dark">{stats.users} <span className="text-xs font-sans text-brand-grey font-normal">Active</span></h3>
+                  <span className="text-xs text-red-400 font-medium">| {stats.deleted_users || 0} Deleted</span>
+                </div>
               </div>
             </div>
 
@@ -683,7 +739,7 @@ export const AdminPage = () => {
                       </thead>
                       <tbody>
                         {orders.slice(0, 5).map(o => (
-                          <tr key={o._id} className="border-b border-brand-bg hover:bg-brand-bg/30">
+                          <tr key={(o.id || o._id)} className="border-b border-brand-bg hover:bg-brand-bg/30">
                             <td className="py-3.5 px-4 font-bold">{o.order_number}</td>
                             <td className="py-3.5 px-4 text-brand-grey">{new Date(o.created_at).toLocaleDateString()}</td>
                             <td className="py-3.5 px-4">{o.name}</td>
@@ -705,11 +761,20 @@ export const AdminPage = () => {
               </div>
             )}
 
-            {activeTab === "orders" && (
+            {activeTab === "orders" && (() => {
+              const filteredOrders = orders.filter(o => showDeletedOrders ? o.is_deleted : !o.is_deleted);
+              return (
               <div className="space-y-4">
-                <h3 className="font-serif text-lg font-semibold text-brand-dark mb-4">Customer Orders</h3>
-                {orders.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-brand-grey">No orders found.</div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-serif text-lg font-semibold text-brand-dark">
+                    {showDeletedOrders ? "Deleted Customer Orders" : "Active Customer Orders"}
+                  </h3>
+                  <button onClick={() => setShowDeletedOrders(!showDeletedOrders)} className="text-xs font-semibold text-brand-accent hover:underline focus:outline-none">
+                    {showDeletedOrders ? "Show Active Orders" : "Show Deleted Orders"}
+                  </button>
+                </div>
+                {filteredOrders.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-brand-grey">No orders found in this view.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left border-collapse">
@@ -724,8 +789,8 @@ export const AdminPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.map(o => (
-                          <tr key={o._id} className="border-b border-brand-bg hover:bg-brand-bg/30">
+                        {filteredOrders.map(o => (
+                          <tr key={(o.id || o._id)} className="border-b border-brand-bg hover:bg-brand-bg/30">
                             <td className="py-4 px-4 font-bold align-top">
                               {o.order_number}
                               <span className="block text-[10px] font-normal text-brand-grey mt-0.5">
@@ -755,16 +820,34 @@ export const AdminPage = () => {
                             </td>
                             <td className="py-4 px-4 align-top font-semibold">₹{o.totalPrice}</td>
                             <td className="py-4 px-4 align-top">
-                              <select
-                                value={o.status}
-                                onChange={(e) => handleUpdateOrderStatus(o._id, e.target.value)}
-                                className="bg-brand-bg border border-brand-card/60 rounded-lg p-1 text-[11px] font-semibold text-brand-dark focus:outline-none focus:border-brand-dark"
-                              >
-                                <option value="pending">Pending</option>
-                                <option value="shipped">Shipped</option>
-                                <option value="delivered">Delivered</option>
-                                <option value="cancelled">Cancelled</option>
-                              </select>
+                              <div className="flex items-center space-x-2">
+                                <select
+                                  value={o.status}
+                                  onChange={(e) => handleUpdateOrderStatus((o.id || o._id), e.target.value)}
+                                  className="bg-brand-bg border border-brand-card/60 rounded-lg p-1 text-[11px] font-semibold text-brand-dark focus:outline-none focus:border-brand-dark"
+                                >
+                                  <option value="pending">Pending</option>
+                                  <option value="shipped">Shipped</option>
+                                  <option value="delivered">Delivered</option>
+                                  <option value="cancelled">Cancelled</option>
+                                </select>
+                                {showDeletedOrders ? (
+                                  <div className="flex space-x-2">
+                                    <button onClick={() => handleRestoreOrder((o.id || o._id))} title="Restore Order" className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors">
+                                      <RotateCcw size={16} />
+                                    </button>
+                                    <button onClick={() => handleHardDeleteOrder((o.id || o._id))} title="Permanently Delete Order" className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  o.status === "pending" && (
+                                    <button onClick={() => handleSoftDeleteOrder((o.id || o._id))} title="Move to Trash" className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  )
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -773,7 +856,8 @@ export const AdminPage = () => {
                   </div>
                 )}
               </div>
-            )}
+            );
+            })()}
 
             {activeTab === "products" && (
               <div className="space-y-6">
@@ -808,11 +892,20 @@ export const AdminPage = () => {
               </div>
             )}
 
-            {activeTab === "users" && (
+            {activeTab === "users" && (() => {
+              const filteredUsers = usersList.filter(u => showDeletedUsers ? u.is_deleted : !u.is_deleted);
+              return (
               <div className="space-y-4">
-                <h3 className="font-serif text-lg font-semibold text-brand-dark mb-4">Registered Accounts</h3>
-                {usersList.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-brand-grey">No registered users.</div>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="font-serif text-lg font-semibold text-brand-dark">
+                    {showDeletedUsers ? "Deleted Accounts" : "Active Registered Accounts"}
+                  </h3>
+                  <button onClick={() => setShowDeletedUsers(!showDeletedUsers)} className="text-xs font-semibold text-brand-accent hover:underline focus:outline-none">
+                    {showDeletedUsers ? "Show Active Users" : "Show Deleted Users"}
+                  </button>
+                </div>
+                {filteredUsers.length === 0 ? (
+                  <div className="py-12 text-center text-xs text-brand-grey">No users found in this view.</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs text-left border-collapse">
@@ -821,14 +914,31 @@ export const AdminPage = () => {
                           <th className="py-3 px-4">Name</th>
                           <th className="py-3 px-4">Email</th>
                           <th className="py-3 px-4">Joined Date</th>
+                          <th className="py-3 px-4">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {usersList.map(u => (
-                          <tr key={u._id || u.email} className="border-b border-brand-bg hover:bg-brand-bg/30">
+                        {filteredUsers.map(u => (
+                          <tr key={(u.id || u._id) || u.email} className="border-b border-brand-bg hover:bg-brand-bg/30">
                             <td className="py-3 px-4 font-semibold">{u.name}</td>
                             <td className="py-3 px-4 text-brand-grey">{u.email}</td>
                             <td className="py-3 px-4 text-brand-grey">{u.created_at ? new Date(u.created_at).toLocaleDateString() : "N/A"}</td>
+                            <td className="py-3 px-4">
+                              {showDeletedUsers ? (
+                                <div className="flex space-x-2">
+                                  <button onClick={() => handleRestoreUser((u.id || u._id))} title="Restore User" className="p-1.5 text-green-600 hover:bg-green-50 rounded-md transition-colors">
+                                    <RotateCcw size={16} />
+                                  </button>
+                                  <button onClick={() => handleHardDeleteUser((u.id || u._id))} title="Permanently Delete User" className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleSoftDeleteUser((u.id || u._id))} title="Move to Trash" className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition-colors">
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -836,7 +946,8 @@ export const AdminPage = () => {
                   </div>
                 )}
               </div>
-            )}
+            );
+            })()}
 
             {activeTab === "coupons" && (
               <div className="space-y-4">
