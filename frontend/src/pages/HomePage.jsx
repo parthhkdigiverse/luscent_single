@@ -189,24 +189,6 @@ export const HomePage = () => {
               />
             ))}
           </div>
-
-          {/* Left Arrow Navigation Button */}
-          <button
-            onClick={() => setActiveSlide((prev) => (prev - 1 + heroSlides.length) % heroSlides.length)}
-            className="absolute left-4 md:left-8 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-[#e1e2d6] hover:bg-[#d4d6c7] active:scale-95 flex items-center justify-center text-brand-dark transition-all shadow-md z-30 cursor-pointer"
-            aria-label="Previous slide"
-          >
-            <ChevronLeft size={24} />
-          </button>
-
-          {/* Right Arrow Navigation Button */}
-          <button
-            onClick={() => setActiveSlide((prev) => (prev + 1) % heroSlides.length)}
-            className="absolute right-4 md:right-8 top-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-[#e1e2d6] hover:bg-[#d4d6c7] active:scale-95 flex items-center justify-center text-brand-dark transition-all shadow-md z-30 cursor-pointer"
-            aria-label="Next slide"
-          >
-            <ChevronRight size={24} />
-          </button>
         </div>
       </section>
 
