@@ -183,6 +183,7 @@ class SettingsBase(BaseModel):
     social_facebook: Optional[str] = ""
     social_twitter: Optional[str] = ""
     social_youtube: Optional[str] = ""
+    online_payment_enabled: bool = True
 
 class SettingsResponse(SettingsBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)

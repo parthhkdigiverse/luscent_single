@@ -35,8 +35,8 @@ export const CheckoutPage = () => {
   const [shippingState, setShippingState] = useState("");
   const [pincode, setPincode] = useState("");
 
-  // Payment choice
   const [paymentMethod, setPaymentMethod] = useState("prepaid"); // prepaid, cod
+  const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(true);
 
   // Order result
   // Order result
@@ -98,6 +98,25 @@ export const CheckoutPage = () => {
       }
     };
     fetchCoupons();
+  }, []);
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/settings/public`);
+        if (res.ok) {
+          const data = await res.json();
+          const enabled = data.online_payment_enabled !== false;
+          setOnlinePaymentEnabled(enabled);
+          if (!enabled) {
+            setPaymentMethod("cod");
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to load settings:", err);
+      }
+    };
+    fetchSettings();
   }, []);
 
   const handleSelectAndApplyCoupon = async (c) => {
@@ -591,27 +610,46 @@ export const CheckoutPage = () => {
 
               <div className="space-y-3">
                 {/* Prepaid Option */}
-                <label
-                  onClick={() => setPaymentMethod("prepaid")}
-                  className={`flex items-center justify-between p-5 rounded-2xl border cursor-pointer transition-all text-left ${
-                    paymentMethod === "prepaid" ? "border-brand-dark bg-brand-bg/30 ring-1 ring-brand-dark" : "border-brand-card hover:bg-brand-bg/10"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 text-left">
-                    <input
-                      type="radio"
-                      name="payment"
-                      checked={paymentMethod === "prepaid"}
-                      readOnly
-                      className="text-brand-dark focus:ring-brand-dark"
-                    />
-                    <div>
-                      <span className="text-xs font-semibold text-brand-dark block">Prepaid (Pay Online)</span>
-                      <span className="text-[10px] text-brand-grey">Pay securely using UPI, Credit/Debit Cards, Netbanking, or Wallets</span>
+                {onlinePaymentEnabled ? (
+                  <label
+                    onClick={() => setPaymentMethod("prepaid")}
+                    className={`flex items-center justify-between p-5 rounded-2xl border cursor-pointer transition-all text-left ${
+                      paymentMethod === "prepaid" ? "border-brand-dark bg-brand-bg/30 ring-1 ring-brand-dark" : "border-brand-card hover:bg-brand-bg/10"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 text-left">
+                      <input
+                        type="radio"
+                        name="payment"
+                        checked={paymentMethod === "prepaid"}
+                        readOnly
+                        className="text-brand-dark focus:ring-brand-dark"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-brand-dark block">Prepaid (Pay Online)</span>
+                        <span className="text-[10px] text-brand-grey">Pay securely using UPI, Credit/Debit Cards, Netbanking, or Wallets</span>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold tracking-widest text-brand-green">10% OFF APPLIED</span>
+                  </label>
+                ) : (
+                  <div
+                    className="flex items-center justify-between p-5 rounded-2xl border border-dashed border-red-200 bg-red-50/10 opacity-70 text-left cursor-not-allowed"
+                  >
+                    <div className="flex items-center gap-3 text-left">
+                      <input
+                        type="radio"
+                        disabled
+                        checked={false}
+                        className="text-brand-grey focus:ring-brand-grey cursor-not-allowed"
+                      />
+                      <div>
+                        <span className="text-xs font-semibold text-brand-grey block line-through">Prepaid (Pay Online)</span>
+                        <span className="text-[10px] text-red-500 font-medium block mt-0.5">Online payment method not available</span>
+                      </div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold tracking-widest text-brand-green">10% OFF APPLIED</span>
-                </label>
+                )}
 
                 {/* COD Option */}
                 <label

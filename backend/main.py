@@ -746,8 +746,12 @@ async def get_admin_settings(current_user: dict = Depends(get_admin_user)):
             "social_instagram": "",
             "social_facebook": "",
             "social_twitter": "",
-            "social_youtube": ""
+            "social_youtube": "",
+            "online_payment_enabled": True
         }
+    # Ensure default is returned if not in DB
+    if "online_payment_enabled" not in settings:
+        settings["online_payment_enabled"] = True
     return settings
 
 @app.get("/api/settings/public")
@@ -758,13 +762,15 @@ async def get_public_settings():
             "social_instagram": "",
             "social_facebook": "",
             "social_twitter": "",
-            "social_youtube": ""
+            "social_youtube": "",
+            "online_payment_enabled": True
         }
     return {
         "social_instagram": settings.get("social_instagram", ""),
         "social_facebook": settings.get("social_facebook", ""),
         "social_twitter": settings.get("social_twitter", ""),
-        "social_youtube": settings.get("social_youtube", "")
+        "social_youtube": settings.get("social_youtube", ""),
+        "online_payment_enabled": settings.get("online_payment_enabled", True)
     }
 
 @app.post("/api/admin/settings")
@@ -776,6 +782,11 @@ async def save_admin_settings(body: SettingsBase, current_user: dict = Depends(g
 # --- Cashfree PG Session Route ---
 @app.post("/api/orders/cashfree-session")
 async def create_cashfree_session(body: dict = Body(...)):
+    # Load settings
+    db_settings = await settings_collection.find_one({})
+    if db_settings and not db_settings.get("online_payment_enabled", True):
+        raise HTTPException(status_code=400, detail="Online payment gateway is currently disabled.")
+
     order_amount = body.get("amount")
     customer_name = body.get("name")
     customer_phone = body.get("phone")
@@ -787,8 +798,6 @@ async def create_cashfree_session(body: dict = Body(...)):
     if len(clean_phone) != 10:
         clean_phone = "9999999999"
     
-    # Load settings
-    db_settings = await settings_collection.find_one({})
     cf_app_id = db_settings.get("cashfree_app_id") if db_settings else None
     cf_secret = db_settings.get("cashfree_secret_key") if db_settings else None
     cf_env = db_settings.get("cashfree_env", "sandbox") if db_settings else "sandbox"

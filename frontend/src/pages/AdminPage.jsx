@@ -63,6 +63,7 @@ export const AdminPage = () => {
   const [socialFacebook, setSocialFacebook] = useState("");
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialYoutube, setSocialYoutube] = useState("");
+  const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
@@ -232,6 +233,7 @@ export const AdminPage = () => {
         setSocialFacebook(settingsData.social_facebook || "");
         setSocialTwitter(settingsData.social_twitter || "");
         setSocialYoutube(settingsData.social_youtube || "");
+        setOnlinePaymentEnabled(settingsData.online_payment_enabled !== false);
       }
 
       // CMS Content Blocks
@@ -473,7 +475,8 @@ export const AdminPage = () => {
       social_instagram: socialInstagram,
       social_facebook: socialFacebook,
       social_twitter: socialTwitter,
-      social_youtube: socialYoutube
+      social_youtube: socialYoutube,
+      online_payment_enabled: onlinePaymentEnabled
     };
 
     try {
@@ -1020,7 +1023,21 @@ export const AdminPage = () => {
                 <form onSubmit={handleSaveSettings} className="space-y-6">
                   {/* Cashfree Segment */}
                   <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4">
-                    <h4 className="font-serif text-sm font-semibold text-brand-dark border-b border-brand-card/30 pb-2">Cashfree Payment Gateway</h4>
+                    <div className="flex items-center justify-between border-b border-brand-card/30 pb-2">
+                      <h4 className="font-serif text-sm font-semibold text-brand-dark">Cashfree Payment Gateway</h4>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={onlinePaymentEnabled}
+                          onChange={(e) => setOnlinePaymentEnabled(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <span className="mr-2 text-[11px] uppercase tracking-wider font-bold text-brand-grey">
+                          Status: <span className={onlinePaymentEnabled ? "text-brand-green" : "text-red-500"}>{onlinePaymentEnabled ? "Active" : "Disabled"}</span>
+                        </span>
+                        <div className="w-8 h-4 bg-brand-card/50 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-dark relative"></div>
+                      </label>
+                    </div>
                     
                     <div className="grid grid-cols-2 gap-4">
                       <div>
