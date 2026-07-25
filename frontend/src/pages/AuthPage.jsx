@@ -19,22 +19,25 @@ export const AuthPage = () => {
 
       {/* Main Container Card */}
       <div className="w-full max-w-5xl bg-white rounded-[32px] overflow-hidden shadow-xl border border-brand-card/40 grid grid-cols-1 lg:grid-cols-12 min-h-[600px] relative z-10">
-        {/* Left Column - Image Cover */}
-        <div className="hidden lg:block lg:col-span-5 relative overflow-hidden select-none">
-          <img
-            src="/images/sunscreen_beach_banner.jpg"
-            alt="Skincare Aesthetic"
-            className="w-full h-full object-cover absolute inset-0"
-          />
-          {/* Elegant Dark Gradient Overlay */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+        {/* Left Column - Styled Product Display */}
+        <div className="hidden lg:flex lg:col-span-5 relative overflow-hidden select-none bg-brand-bg flex-col items-center justify-between p-10 text-center border-r border-brand-card/25 min-h-[600px]">
+          <div className="w-full text-left">
+            <span className="font-serif text-2xl font-semibold tracking-tight text-brand-dark">Luscent Glow.</span>
+          </div>
+
+          <div className="my-auto py-8 flex items-center justify-center">
+            <img
+              src="/images/combo.png"
+              alt="Luscent Glow Combo"
+              className="max-h-64 object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500"
+            />
+          </div>
           
-          <div className="absolute bottom-10 left-10 right-10 text-left text-white space-y-3 z-10">
-            <span className="font-serif text-2xl font-bold tracking-tight">Luscent Glow.</span>
-            <p className="text-[11px] uppercase tracking-widest text-brand-accent font-semibold">
+          <div className="text-left w-full space-y-2">
+            <p className="text-[10px] uppercase tracking-widest text-brand-accent font-bold">
               Powerful Protection. Effective Gentle Care.
             </p>
-            <p className="text-xs text-white/80 leading-relaxed max-w-sm">
+            <p className="text-xs text-brand-dark/70 leading-relaxed">
               Formulated in clinical labs to protect and cleanse your skin without compromise.
             </p>
           </div>
