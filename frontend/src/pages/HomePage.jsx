@@ -91,13 +91,7 @@ export const HomePage = () => {
 
   const [activeSlide, setActiveSlide] = useState(0);
 
-  // Auto-scroll slides
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setActiveSlide((prev) => (prev + 1) % heroSlides.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, []);
+
 
   // Get first 3 FAQs for preview
   const faqPreview = faqList && faqList.length > 0 && faqList[0].questions
