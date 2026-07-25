@@ -138,6 +138,7 @@ export const AdminPage = () => {
         const data = await res.json();
         sessionStorage.setItem("luscent_admin_token", data.token);
         setIsAuthenticated(true);
+        window.location.reload();
       } else {
         const data = await res.json();
         setLoginError(data.detail || "Invalid credentials");
@@ -152,6 +153,7 @@ export const AdminPage = () => {
   const handleAdminLogout = () => {
     sessionStorage.removeItem("luscent_admin_token");
     setIsAuthenticated(false);
+    window.location.reload();
   };
 
   const fetchDashboardData = async () => {
