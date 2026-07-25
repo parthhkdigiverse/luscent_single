@@ -455,53 +455,7 @@ export const CheckoutPage = () => {
     );
   }
 
-  // Auth Guard / Decision
-  if (!isLoggedIn && !checkoutAsGuest && step < 4) {
-    return (
-      <div className="pt-32 pb-24 px-6 max-w-lg mx-auto text-left">
-        <div className="bg-white/90 backdrop-blur-md rounded-[32px] border border-brand-card/40 shadow-xl p-10 space-y-8">
-          <div className="text-center space-y-2">
-            <span className="inline-flex items-center gap-1.5 text-[9px] tracking-widest uppercase font-bold text-brand-accent bg-brand-accent/10 px-3.5 py-1 rounded-full">
-              <ShieldCheck size={12} className="stroke-[2.5]" /> SECURE CHECKOUT
-            </span>
-            <h2 className="font-serif text-2xl md:text-3xl font-medium text-brand-dark">Checkout Options</h2>
-            <p className="text-xs text-brand-grey">Please choose how you'd like to proceed.</p>
-          </div>
 
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <h3 className="text-xs uppercase tracking-widest font-semibold text-brand-dark">Checkout as a Guest</h3>
-              <p className="text-[11px] text-brand-grey leading-relaxed">No password required. You can create an account later.</p>
-              <Button
-                onClick={() => setCheckoutAsGuest(true)}
-                variant="outline"
-                className="w-full py-3.5 text-xs uppercase tracking-widest border border-brand-dark/20 hover:border-brand-dark hover:bg-brand-dark hover:text-white transition-all duration-300 font-semibold"
-              >
-                Continue as Guest
-              </Button>
-            </div>
-
-            <div className="relative my-6 text-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-brand-card/40"></div>
-              </div>
-              <span className="relative bg-white/90 px-4 text-[9px] uppercase tracking-widest font-semibold text-brand-grey">Or</span>
-            </div>
-
-            <div className="space-y-3">
-              <h3 className="text-xs uppercase tracking-widest font-semibold text-brand-dark">Sign in to Account</h3>
-              <p className="text-[11px] text-brand-grey leading-relaxed">Speed up checkout and track your order history.</p>
-              <Link to="/auth">
-                <Button className="w-full py-3.5 text-xs uppercase tracking-widest bg-brand-dark text-white hover:bg-black transition-all duration-300 font-semibold shadow-sm">
-                  Login or Sign Up
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Confirmation view
   if (step === 4) {
