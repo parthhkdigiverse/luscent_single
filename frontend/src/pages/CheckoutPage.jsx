@@ -37,6 +37,7 @@ export const CheckoutPage = () => {
 
   const [paymentMethod, setPaymentMethod] = useState("prepaid"); // prepaid, cod
   const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(true);
+  const [activeGateway, setActiveGateway] = useState("cashfree");
 
   // Order result
   // Order result
@@ -108,6 +109,7 @@ export const CheckoutPage = () => {
           const data = await res.json();
           const enabled = data.online_payment_enabled !== false;
           setOnlinePaymentEnabled(enabled);
+          setActiveGateway(data.active_gateway || "cashfree");
           if (!enabled) {
             setPaymentMethod("cod");
           }
@@ -245,6 +247,21 @@ export const CheckoutPage = () => {
     });
   };
 
+  const loadRazorpaySDK = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
+
   const submitOrderToBackend = async (orderData) => {
     const token = localStorage.getItem("luscent_token");
     let finalOrderNum = "";
@@ -311,49 +328,112 @@ export const CheckoutPage = () => {
     };
 
     if (paymentMethod === "prepaid") {
-      const sdkLoaded = await loadCashfreeSDK();
-      if (!sdkLoaded) {
-        alert("Failed to load payment gateway SDK. Please try again.");
-        return;
-      }
-
-      try {
-        // Create order in backend first
-        const orderNum = await submitOrderToBackend(orderData);
-
-        const sessionRes = await fetch(`${API_URL}/api/orders/cashfree-session`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: grandTotal,
-            name: name,
-            phone: phone,
-            email: user?.email || "guest@luscentglow.com",
-            order_id: orderNum,
-            return_url: `${window.location.origin}/checkout?step=4&order_id=${orderNum}`
-          })
-        });
-
-        if (!sessionRes.ok) throw new Error("Could not initialize payment session");
-        const sessionData = await sessionRes.json();
-
-        if (sessionData.is_mock) {
-          alert("Launching Cashfree Sandbox Gateway Checkout (Simulated Mode)... Click OK to simulate successful payment!");
-          setStep(4);
-          clearCart();
+      if (activeGateway === "razorpay") {
+        const sdkLoaded = await loadRazorpaySDK();
+        if (!sdkLoaded) {
+          alert("Failed to load Razorpay payment gateway SDK. Please try again.");
           return;
         }
 
-        const cashfree = window.Cashfree({
-          mode: sessionData.mode
-        });
+        try {
+          // Create order in backend first
+          const orderNum = await submitOrderToBackend(orderData);
 
-        cashfree.checkout({
-          paymentSessionId: sessionData.payment_session_id,
-          redirectTarget: "_self"
-        });
-      } catch (err) {
-        alert("Payment initialization error: " + err.message);
+          const sessionRes = await fetch(`${API_URL}/api/orders/razorpay-session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: grandTotal,
+              order_id: orderNum
+            })
+          });
+
+          if (!sessionRes.ok) throw new Error("Could not initialize Razorpay order");
+          const sessionData = await sessionRes.json();
+
+          if (sessionData.is_mock) {
+            alert("Launching Razorpay Sandbox Checkout (Simulated Mode)... Click OK to simulate successful payment!");
+            setStep(4);
+            clearCart();
+            return;
+          }
+
+          const options = {
+            key: sessionData.key_id,
+            amount: Math.round(grandTotal * 100),
+            currency: sessionData.currency || "INR",
+            name: "LuscentGlow",
+            description: `Order Payment for ${orderNum}`,
+            order_id: sessionData.id,
+            handler: function (response) {
+              alert("Payment successful! Razorpay Payment ID: " + response.razorpay_payment_id);
+              // Clean cart and redirect
+              clearCart();
+              navigate(`/checkout?step=4&order_id=${orderNum}`);
+            },
+            prefill: {
+              name: name,
+              email: user?.email || "guest@luscentglow.com",
+              contact: phone
+            },
+            theme: {
+              color: "#0F0F0F"
+            }
+          };
+
+          const rzp = new window.Razorpay(options);
+          rzp.on("payment.failed", function (response) {
+            alert("Payment failed: " + response.error.description);
+          });
+          rzp.open();
+        } catch (err) {
+          alert("Razorpay initialization error: " + err.message);
+        }
+      } else {
+        const sdkLoaded = await loadCashfreeSDK();
+        if (!sdkLoaded) {
+          alert("Failed to load payment gateway SDK. Please try again.");
+          return;
+        }
+
+        try {
+          // Create order in backend first
+          const orderNum = await submitOrderToBackend(orderData);
+
+          const sessionRes = await fetch(`${API_URL}/api/orders/cashfree-session`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              amount: grandTotal,
+              name: name,
+              phone: phone,
+              email: user?.email || "guest@luscentglow.com",
+              order_id: orderNum,
+              return_url: `${window.location.origin}/checkout?step=4&order_id=${orderNum}`
+            })
+          });
+
+          if (!sessionRes.ok) throw new Error("Could not initialize payment session");
+          const sessionData = await sessionRes.json();
+
+          if (sessionData.is_mock) {
+            alert("Launching Cashfree Sandbox Gateway Checkout (Simulated Mode)... Click OK to simulate successful payment!");
+            setStep(4);
+            clearCart();
+            return;
+          }
+
+          const cashfree = window.Cashfree({
+            mode: sessionData.mode
+          });
+
+          cashfree.checkout({
+            paymentSessionId: sessionData.payment_session_id,
+            redirectTarget: "_self"
+          });
+        } catch (err) {
+          alert("Payment initialization error: " + err.message);
+        }
       }
     } else {
       // Cash on Delivery

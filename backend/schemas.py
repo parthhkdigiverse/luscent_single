@@ -173,9 +173,13 @@ class CouponResponse(CouponBase):
 
 # Settings Schemas
 class SettingsBase(BaseModel):
-    cashfree_app_id: str
-    cashfree_secret_key: str
+    cashfree_app_id: Optional[str] = ""
+    cashfree_secret_key: Optional[str] = ""
     cashfree_env: str = "sandbox"  # sandbox or production
+    razorpay_key_id: Optional[str] = ""
+    razorpay_key_secret: Optional[str] = ""
+    razorpay_env: Optional[str] = "sandbox"  # sandbox or production
+    active_gateway: Optional[str] = "cashfree"  # cashfree or razorpay
     delhivery_api_token: str
     delhivery_env: str = "sandbox"  # sandbox or production
     delhivery_warehouse: Optional[str] = "Luscentglow Warehouse"

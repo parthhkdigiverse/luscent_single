@@ -740,6 +740,10 @@ async def get_admin_settings(current_user: dict = Depends(get_admin_user)):
             "cashfree_app_id": "",
             "cashfree_secret_key": "",
             "cashfree_env": "sandbox",
+            "razorpay_key_id": "",
+            "razorpay_key_secret": "",
+            "razorpay_env": "sandbox",
+            "active_gateway": "cashfree",
             "delhivery_api_token": "",
             "delhivery_env": "sandbox",
             "delhivery_warehouse": "Luscentglow Warehouse",
@@ -752,6 +756,14 @@ async def get_admin_settings(current_user: dict = Depends(get_admin_user)):
     # Ensure default is returned if not in DB
     if "online_payment_enabled" not in settings:
         settings["online_payment_enabled"] = True
+    if "active_gateway" not in settings:
+        settings["active_gateway"] = "cashfree"
+    if "razorpay_key_id" not in settings:
+        settings["razorpay_key_id"] = ""
+    if "razorpay_key_secret" not in settings:
+        settings["razorpay_key_secret"] = ""
+    if "razorpay_env" not in settings:
+        settings["razorpay_env"] = "sandbox"
     return settings
 
 @app.get("/api/settings/public")
@@ -763,14 +775,16 @@ async def get_public_settings():
             "social_facebook": "",
             "social_twitter": "",
             "social_youtube": "",
-            "online_payment_enabled": True
+            "online_payment_enabled": True,
+            "active_gateway": "cashfree"
         }
     return {
         "social_instagram": settings.get("social_instagram", ""),
         "social_facebook": settings.get("social_facebook", ""),
         "social_twitter": settings.get("social_twitter", ""),
         "social_youtube": settings.get("social_youtube", ""),
-        "online_payment_enabled": settings.get("online_payment_enabled", True)
+        "online_payment_enabled": settings.get("online_payment_enabled", True),
+        "active_gateway": settings.get("active_gateway", "cashfree")
     }
 
 @app.post("/api/admin/settings")
@@ -860,6 +874,75 @@ async def create_cashfree_session(body: dict = Body(...)):
             "order_id": order_id,
             "cf_order_id": "mock_cf_" + order_id,
             "mode": cf_env,
+            "is_mock": True
+        }
+
+# --- Razorpay PG Session Route ---
+@app.post("/api/orders/razorpay-session")
+async def create_razorpay_session(body: dict = Body(...)):
+    # Load settings
+    db_settings = await settings_collection.find_one({})
+    if db_settings and not db_settings.get("online_payment_enabled", True):
+        raise HTTPException(status_code=400, detail="Online payment gateway is currently disabled.")
+
+    order_amount = body.get("amount")
+    order_id = body.get("order_id", "LG-" + str(random.randint(100000, 999999)))
+
+    rp_key = db_settings.get("razorpay_key_id") if db_settings else None
+    rp_secret = db_settings.get("razorpay_key_secret") if db_settings else None
+    rp_env = db_settings.get("razorpay_env", "sandbox") if db_settings else "sandbox"
+
+    # Fallback to Sandbox default mock keys if not configured in Settings
+    if not rp_key or not rp_secret:
+        rp_key = "rzp_test_mockkeyid123"
+        rp_secret = "mocksecretkey123"
+        rp_env = "sandbox"
+
+    # Razorpay amount is in paise (1 INR = 100 Paise)
+    amount_paise = int(float(order_amount) * 100)
+
+    url = "https://api.razorpay.com/v1/orders"
+    payload = {
+        "amount": amount_paise,
+        "currency": "INR",
+        "receipt": order_id
+    }
+
+    try:
+        # If we have mock keys and we are in sandbox/mock mode, we can return a mock Razorpay order ID immediately
+        if rp_key == "rzp_test_mockkeyid123":
+            return {
+                "id": "order_mock_" + "".join([str(random.randint(0, 9)) for _ in range(14)]),
+                "amount": order_amount,
+                "currency": "INR",
+                "key_id": rp_key,
+                "mode": rp_env,
+                "is_mock": True
+            }
+
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, json=payload, auth=(rp_key, rp_secret))
+            if res.status_code == 200:
+                res_data = res.json()
+                return {
+                    "id": res_data.get("id"),
+                    "amount": order_amount,
+                    "currency": "INR",
+                    "key_id": rp_key,
+                    "mode": rp_env
+                }
+            else:
+                raise HTTPException(status_code=res.status_code, detail=f"Razorpay API Error: {res.text}")
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        # Fallback Mock Session if call fails or sandbox API down
+        return {
+            "id": "order_mock_" + "".join([str(random.randint(0, 9)) for _ in range(14)]),
+            "amount": order_amount,
+            "currency": "INR",
+            "key_id": rp_key,
+            "mode": rp_env,
             "is_mock": True
         }
 

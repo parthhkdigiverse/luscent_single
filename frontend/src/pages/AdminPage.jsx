@@ -55,6 +55,11 @@ export const AdminPage = () => {
   const [cashfreeSecretKey, setCashfreeSecretKey] = useState("");
   const [cashfreeEnv, setCashfreeEnv] = useState("sandbox");
   const [showCashfreeSecret, setShowCashfreeSecret] = useState(false);
+  const [razorpayKeyId, setRazorpayKeyId] = useState("");
+  const [razorpayKeySecret, setRazorpayKeySecret] = useState("");
+  const [razorpayEnv, setRazorpayEnv] = useState("sandbox");
+  const [showRazorpaySecret, setShowRazorpaySecret] = useState(false);
+  const [activeGateway, setActiveGateway] = useState("cashfree");
   const [delhiveryApiToken, setDelhiveryApiToken] = useState("");
   const [showDelhiveryToken, setShowDelhiveryToken] = useState(false);
   const [delhiveryEnv, setDelhiveryEnv] = useState("sandbox");
@@ -226,6 +231,10 @@ export const AdminPage = () => {
         setCashfreeAppId(settingsData.cashfree_app_id || "");
         setCashfreeSecretKey(settingsData.cashfree_secret_key || "");
         setCashfreeEnv(settingsData.cashfree_env || "sandbox");
+        setRazorpayKeyId(settingsData.razorpay_key_id || "");
+        setRazorpayKeySecret(settingsData.razorpay_key_secret || "");
+        setRazorpayEnv(settingsData.razorpay_env || "sandbox");
+        setActiveGateway(settingsData.active_gateway || "cashfree");
         setDelhiveryApiToken(settingsData.delhivery_api_token || "");
         setDelhiveryEnv(settingsData.delhivery_env || "sandbox");
         setDelhiveryWarehouse(settingsData.delhivery_warehouse || "Luscentglow Warehouse");
@@ -469,6 +478,10 @@ export const AdminPage = () => {
       cashfree_app_id: cashfreeAppId,
       cashfree_secret_key: cashfreeSecretKey,
       cashfree_env: cashfreeEnv,
+      razorpay_key_id: razorpayKeyId,
+      razorpay_key_secret: razorpayKeySecret,
+      razorpay_env: razorpayEnv,
+      active_gateway: activeGateway,
       delhivery_api_token: delhiveryApiToken,
       delhivery_env: delhiveryEnv,
       delhivery_warehouse: delhiveryWarehouse,
@@ -1021,10 +1034,10 @@ export const AdminPage = () => {
                 </div>
 
                 <form onSubmit={handleSaveSettings} className="space-y-6">
-                  {/* Cashfree Segment */}
-                  <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4">
+                  {/* Global Online Payment Toggle & Active Gateway Selector */}
+                  <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4 animate-fade-in">
                     <div className="flex items-center justify-between border-b border-brand-card/30 pb-2">
-                      <h4 className="font-serif text-sm font-semibold text-brand-dark">Cashfree Payment Gateway</h4>
+                      <h4 className="font-serif text-sm font-semibold text-brand-dark">Online Payment Settings</h4>
                       <label className="relative inline-flex items-center cursor-pointer">
                         <input
                           type="checkbox"
@@ -1033,10 +1046,29 @@ export const AdminPage = () => {
                           className="sr-only peer"
                         />
                         <span className="mr-2 text-[11px] uppercase tracking-wider font-bold text-brand-grey">
-                          Status: <span className={onlinePaymentEnabled ? "text-brand-green" : "text-red-500"}>{onlinePaymentEnabled ? "Active" : "Disabled"}</span>
+                          Online Payments: <span className={onlinePaymentEnabled ? "text-brand-green" : "text-red-500"}>{onlinePaymentEnabled ? "Active" : "Disabled"}</span>
                         </span>
                         <div className="w-8 h-4 bg-brand-card/50 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-dark relative"></div>
                       </label>
+                    </div>
+
+                    <div>
+                      <label className="font-semibold block mb-1 text-xs text-brand-dark">Active Payment Gateway</label>
+                      <select
+                        value={activeGateway}
+                        onChange={(e) => setActiveGateway(e.target.value)}
+                        className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                      >
+                        <option value="cashfree">Cashfree Payment Gateway</option>
+                        <option value="razorpay">Razorpay Payment Gateway</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Cashfree Segment */}
+                  <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-brand-card/30 pb-2">
+                      <h4 className="font-serif text-sm font-semibold text-brand-dark">Cashfree Credentials</h4>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-4">
@@ -1079,6 +1111,57 @@ export const AdminPage = () => {
                           className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-brand-grey hover:text-brand-dark"
                         >
                           {showCashfreeSecret ? "Hide" : "View"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Razorpay Segment */}
+                  <div className="p-5 bg-brand-bg/50 border border-brand-card/45 rounded-2xl space-y-4">
+                    <div className="flex items-center justify-between border-b border-brand-card/30 pb-2">
+                      <h4 className="font-serif text-sm font-semibold text-brand-dark">Razorpay Credentials</h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Razorpay Key ID</label>
+                        <input
+                          type="text"
+                          value={razorpayKeyId}
+                          onChange={(e) => setRazorpayKeyId(e.target.value)}
+                          placeholder="e.g. rzp_test_..."
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        />
+                      </div>
+                      <div>
+                        <label className="font-semibold block mb-1 text-xs text-brand-dark">Razorpay Environment Mode</label>
+                        <select
+                          value={razorpayEnv}
+                          onChange={(e) => setRazorpayEnv(e.target.value)}
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                        >
+                          <option value="sandbox">Sandbox (Testing)</option>
+                          <option value="production">Production (Live)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="font-semibold block mb-1 text-xs text-brand-dark">Razorpay Key Secret</label>
+                      <div className="relative">
+                        <input
+                          type={showRazorpaySecret ? "text" : "password"}
+                          value={razorpayKeySecret}
+                          onChange={(e) => setRazorpayKeySecret(e.target.value)}
+                          placeholder="••••••••••••••••••••••••••••••••"
+                          className="w-full p-2.5 bg-white border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs pr-16"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowRazorpaySecret(!showRazorpaySecret)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-semibold text-brand-grey hover:text-brand-dark"
+                        >
+                          {showRazorpaySecret ? "Hide" : "View"}
                         </button>
                       </div>
                     </div>
