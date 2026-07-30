@@ -100,7 +100,9 @@ export const ContactPage = () => {
               </div>
               <div className="text-xs">
                 <span className="font-semibold text-brand-dark uppercase tracking-wider block">Phone & WhatsApp</span>
-                <span className="text-brand-grey block mt-0.5">{settings.contact_phone}</span>
+                <a href={`tel:${String(settings.contact_phone).replace(/[\s-]/g, '')}`} className="text-brand-grey hover:underline block mt-0.5 font-sans">
+                  {settings.contact_phone}
+                </a>
               </div>
             </div>
 

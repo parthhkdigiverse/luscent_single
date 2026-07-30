@@ -140,7 +140,9 @@ export const Footer = () => {
           <h4 className="text-xs uppercase tracking-widest font-semibold text-white/50 mb-4">Manufacturer Info</h4>
           <div className="flex gap-2.5 items-start">
             <Phone size={14} className="mt-0.5 text-brand-accent flex-shrink-0" />
-            <span>{settings.contact_phone}</span>
+            <a href={`tel:${String(settings.contact_phone).replace(/[\s-]/g, '')}`} className="hover:underline transition-colors">
+              {settings.contact_phone}
+            </a>
           </div>
           <div className="flex gap-2.5 items-start">
             <Mail size={14} className="mt-0.5 text-brand-accent flex-shrink-0" />
