@@ -831,31 +831,7 @@ export const AdminPage = () => {
             </div>
           </div>
 
-          {/* Navigation Tabs Bar */}
-          <div className="flex flex-wrap gap-2 border-b border-brand-card/30 pb-4 overflow-x-auto">
-            {[
-              { id: "overview", label: "Overview" },
-              { id: "orders", label: "Orders" },
-              { id: "products", label: "Products" },
-              { id: "users", label: "Users" },
-              { id: "coupons", label: "Coupons" },
-              { id: "reviews", label: "Reviews" },
-              { id: "integrations", label: "Integrations" },
-              { id: "content", label: "CMS Content" }
-            ].map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-semibold tracking-wider uppercase transition-all ${
-                  activeTab === tab.id
-                    ? "bg-brand-dark text-white shadow-sm"
-                    : "bg-white text-brand-grey border border-brand-card/40 hover:bg-brand-bg hover:text-brand-dark"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <div className="pt-6"></div>
 
           {/* Tab Panes */}
           <div className="bg-white border border-brand-card/40 rounded-3xl p-6 shadow-sm min-h-[400px]">
