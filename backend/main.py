@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 
 from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection
 from schemas import (
-    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
+    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
     ContactCreate, ContactResponse, CouponBase, CouponResponse,
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
@@ -345,6 +345,22 @@ async def reset_password(req: ResetPasswordRequest):
     )
     
     return {"message": "Password reset successfully! You can now log in with your new password."}
+
+@app.post("/api/auth/change-password")
+async def change_password(req: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    user = await users_collection.find_one({"email": current_user["email"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not verify_password(req.current_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+        
+    hashed_pwd = get_password_hash(req.new_password)
+    await users_collection.update_one(
+        {"email": user["email"]},
+        {"$set": {"password": hashed_pwd}}
+    )
+    return {"message": "Password changed successfully"}
 
 
 # --- Products Routes ---

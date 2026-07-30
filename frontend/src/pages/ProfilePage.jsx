@@ -22,6 +22,14 @@ export const ProfilePage = () => {
   const [phone, setPhone] = useState(user?.phone || "+91 98765 43210");
   const [saveSuccess, setSaveSuccess] = useState("");
 
+  // Change Password State
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [currentPwd, setCurrentPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [pwdMsg, setPwdMsg] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdLoading, setPwdLoading] = useState(false);
+
   // Addresses State
   const [addresses, setAddresses] = useState([]);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -151,6 +159,40 @@ export const ProfilePage = () => {
     e.preventDefault();
     setSaveSuccess("Profile details updated successfully!");
     setTimeout(() => setSaveSuccess(""), 4000);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwdMsg("");
+    setPwdError("");
+    if (newPwd.length < 6) {
+      setPwdError("New password must be at least 6 characters.");
+      return;
+    }
+    setPwdLoading(true);
+    try {
+      const token = localStorage.getItem("luscent_token");
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ current_password: currentPwd, new_password: newPwd })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to change password.");
+      
+      setCurrentPwd("");
+      setNewPwd("");
+      setShowPwdModal(false);
+      setSaveSuccess("Password changed successfully!");
+      setTimeout(() => setSaveSuccess(""), 4000);
+    } catch (err) {
+      setPwdError(err.message);
+    } finally {
+      setPwdLoading(false);
+    }
   };
 
   // Address Actions
@@ -466,7 +508,22 @@ export const ProfilePage = () => {
                   />
                 </div>
 
-                <Button type="submit" className="py-3 px-6 text-xs uppercase tracking-wider bg-brand-dark text-white hover:bg-black font-semibold rounded-xl mt-4">
+                <div className="flex justify-between items-end">
+                  <div className="flex-1 mr-4">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">Password</label>
+                    <input
+                      type="password"
+                      value="********"
+                      disabled
+                      className="w-full p-3 bg-gray-100 border border-brand-card/40 rounded-xl text-xs text-gray-500 cursor-not-allowed max-w-[250px]"
+                    />
+                  </div>
+                  <Button type="button" onClick={() => setShowPwdModal(true)} variant="outline" className="text-xs py-3 px-4 border border-brand-dark/20">
+                    Change Password
+                  </Button>
+                </div>
+
+                <Button type="submit" className="py-3 px-6 text-xs uppercase tracking-wider bg-brand-dark text-white hover:bg-black font-semibold rounded-xl mt-6">
                   Save Profile Changes
                 </Button>
               </form>
@@ -703,6 +760,67 @@ export const ProfilePage = () => {
                 </Button>
                 <Button type="submit" className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
                   {editingAddress ? "Save Changes" : "Add Address"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Change Password Modal ─── */}
+      {showPwdModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[32px] border border-brand-card/40 shadow-2xl max-w-sm w-full p-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-brand-card/30 pb-3">
+              <h3 className="font-serif text-lg font-semibold text-brand-dark">Change Password</h3>
+              <button onClick={() => { setShowPwdModal(false); setPwdError(""); setPwdMsg(""); }} className="text-brand-grey hover:text-brand-dark p-1 rounded-full">
+                <X size={18} />
+              </button>
+            </div>
+
+            {pwdError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                <span>{pwdError}</span>
+              </div>
+            )}
+            {pwdMsg && (
+              <div className="p-3 bg-brand-green/10 border border-brand-green/20 rounded-xl text-brand-green text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 size={16} /> {pwdMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={currentPwd}
+                  onChange={(e) => setCurrentPwd(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="••••••••"
+                  className="w-full p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-brand-card/30">
+                <Button type="button" onClick={() => { setShowPwdModal(false); setPwdError(""); setPwdMsg(""); }} variant="outline" className="py-2 px-4 border text-xs">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pwdLoading} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
+                  {pwdLoading ? "Saving..." : "Update Password"}
                 </Button>
               </div>
             </form>

@@ -50,6 +50,10 @@ class ResetPasswordRequest(BaseModel):
     otp: str
     new_password: str
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 # Product Schemas
 class ProductBase(BaseModel):
     id: str  # Custom string identifier (e.g. 'sunscreen')
