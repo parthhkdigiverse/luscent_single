@@ -4,6 +4,10 @@ import random
 import httpx
 from datetime import datetime, timezone
 from typing import List, Optional
+import smtplib
+import ssl
+from email.message import EmailMessage
+from pydantic import BaseModel
 
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -970,6 +974,62 @@ async def track_order_public(identifier: str):
             } for item in order.get("items", [])
         ]
     }
+
+# --- Newsletter Subscription Route ---
+class SubscribeRequest(BaseModel):
+    email: str
+
+@app.post("/api/subscribe")
+async def subscribe_newsletter(req: SubscribeRequest):
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("Warning: SMTP credentials not set in .env. Email not sent.")
+        return {"message": "Subscribed successfully (no email sent due to missing config)"}
+
+    msg = EmailMessage()
+    msg['Subject'] = "Welcome to the Luscent Glow Club!"
+    msg['From'] = f"Luscent Glow <{sender_email}>"
+    msg['To'] = req.email
+
+    msg.set_content("Hello!\n\nThank you for subscribing to the Luscent Glow Club. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.\n\nUse code GLOW10 for 10% off your first order.\nShop now: https://luscentglow.com/\n\nStay Radiant, Stay Protected,\nLuscent Glow Team")
+    
+    msg.add_alternative("""\
+    <html>
+      <body>
+        <h2 style="color:#d97743;">Welcome to the Luscent Glow Club!</h2>
+        <p>Hello!</p>
+        <p>Thank you for subscribing. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.</p>
+        <p>Use code <b>GLOW10</b> for 10% off your first order.</p>
+        <p>
+          <a href="https://luscentglow.com/" style="display:inline-block; padding:10px 20px; background-color:#d97743; color:#ffffff; font-weight:bold; text-decoration:none; border-radius:5px; font-size:14px; margin-top:10px;">
+            Shop Now
+          </a>
+        </p>
+        <br/>
+        <p>Stay Radiant, Stay Protected,<br/><b>Luscent Glow Team</b></p>
+      </body>
+    </html>
+    """, subtype='html')
+
+    try:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        if int(smtp_port) == 587:
+            server.starttls(context=context)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        print(f"Subscription email successfully sent to {req.email}")
+    except Exception as e:
+        print(f"Failed to send subscription email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+        
+    return {"message": "Subscribed successfully"}
 
 # --- Serve Frontend in Production ---
 if os.getenv("APP_ENV") == "production":
