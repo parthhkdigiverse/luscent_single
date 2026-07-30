@@ -38,6 +38,7 @@ export const ProfilePage = () => {
 
   // Address Form State
   const [addrTag, setAddrTag] = useState("Home");
+  const [customTag, setCustomTag] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [addrPhone, setAddrPhone] = useState("");
   const [street, setStreet] = useState("");
@@ -55,26 +56,7 @@ export const ProfilePage = () => {
       const storageKey = `luscent_addresses_${user.email}`;
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
-        if (saved.length === 0) {
-          // Default initial address
-          const initial = [
-            {
-              id: "addr_default_1",
-              tag: "Home",
-              receiverName: user.name || "Customer",
-              phone: "+91 98765 43210",
-              street: "123 Solar Glow Way, Marine Drive",
-              city: "Mumbai",
-              state: "Maharashtra",
-              pincode: "400002",
-              isDefault: true
-            }
-          ];
-          setAddresses(initial);
-          localStorage.setItem(storageKey, JSON.stringify(initial));
-        } else {
-          setAddresses(saved);
-        }
+        setAddresses(saved);
       } catch (e) {
         console.error("Error loading addresses:", e);
       }
@@ -199,8 +181,9 @@ export const ProfilePage = () => {
   const handleOpenAddAddress = () => {
     setEditingAddress(null);
     setAddrTag("Home");
+    setCustomTag("");
     setReceiverName(user?.name || "");
-    setAddrPhone("+91 98765 43210");
+    setAddrPhone("");
     setStreet("");
     setCity("");
     setStateName("");
@@ -211,7 +194,13 @@ export const ProfilePage = () => {
 
   const handleOpenEditAddress = (addr) => {
     setEditingAddress(addr);
-    setAddrTag(addr.tag || "Home");
+    if (["Home", "Office"].includes(addr.tag)) {
+      setAddrTag(addr.tag);
+      setCustomTag("");
+    } else {
+      setAddrTag("Other");
+      setCustomTag(addr.tag || "");
+    }
     setReceiverName(addr.receiverName || user?.name || "");
     setAddrPhone(addr.phone || "");
     setStreet(addr.street || "");
@@ -246,9 +235,10 @@ export const ProfilePage = () => {
 
   const handleAddressSubmit = (e) => {
     e.preventDefault();
+    const finalTag = addrTag === "Other" && customTag.trim() ? customTag.trim() : addrTag;
     const newAddrObj = {
       id: editingAddress ? editingAddress.id : `addr_${Date.now()}`,
-      tag: addrTag,
+      tag: finalTag,
       receiverName: receiverName || user?.name || "Customer",
       phone: addrPhone,
       street,
@@ -270,6 +260,9 @@ export const ProfilePage = () => {
         ...a,
         isDefault: a.id === newAddrObj.id
       }));
+    } else if (newList.length > 0 && !newList.some((a) => a.isDefault)) {
+      // Ensure at least one default address exists
+      newList[0].isDefault = true;
     }
 
     saveAddressesToStorage(newList);
@@ -666,6 +659,16 @@ export const ProfilePage = () => {
                     </button>
                   ))}
                 </div>
+                {addrTag === "Other" && (
+                  <input
+                    type="text"
+                    value={customTag}
+                    onChange={(e) => setCustomTag(e.target.value)}
+                    required
+                    placeholder="Enter custom label (e.g. Friend's House)"
+                    className="w-full mt-3 p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
+                  />
+                )}
               </div>
 
               <div>
