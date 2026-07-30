@@ -269,16 +269,55 @@ async def forgot_password(req: ForgotPasswordRequest):
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     from datetime import timedelta
-    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    expiry = datetime.utcnow() + timedelta(minutes=15)
     
     await users_collection.update_one(
         {"email": req.email},
         {"$set": {"reset_otp": otp, "reset_otp_expiry": expiry}}
     )
     
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if all([smtp_server, smtp_user, smtp_pass]):
+        msg = EmailMessage()
+        msg['Subject'] = "Luscent Glow - Password Reset OTP"
+        msg['From'] = f"Luscent Glow <{sender_email}>"
+        msg['To'] = req.email
+
+        msg.set_content(f"Hello,\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 15 minutes.\n\nLuscent Glow Team")
+        
+        msg.add_alternative(f"""\
+        <html>
+          <body>
+            <h2 style="color:#d97743;">Password Reset Request</h2>
+            <p>Hello,</p>
+            <p>We received a request to reset your password. Use the following OTP to proceed:</p>
+            <h3 style="background:#f4f4f4; padding:10px; display:inline-block; letter-spacing:2px; border-radius:5px;">{otp}</h3>
+            <p>This OTP is valid for 15 minutes.</p>
+            <br/>
+            <p>Luscent Glow Team</p>
+          </body>
+        </html>
+        """, subtype='html')
+
+        try:
+            context = ssl.create_default_context()
+            server = smtplib.SMTP(smtp_server, int(smtp_port))
+            if int(smtp_port) == 587:
+                server.starttls(context=context)
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+            print(f"OTP email successfully sent to {req.email}")
+        except Exception as e:
+            print(f"Failed to send OTP email: {e}")
+            
     return {
-        "message": f"Reset OTP sent! Use verification code: {otp}",
-        "otp": otp
+        "message": "Reset OTP sent to your email address."
     }
 
 @app.post("/api/auth/reset-password")
@@ -293,7 +332,7 @@ async def reset_password(req: ResetPasswordRequest):
     if not saved_otp or saved_otp != req.otp:
         raise HTTPException(status_code=400, detail="Invalid verification OTP.")
     
-    if not expiry or expiry < datetime.now(timezone.utc):
+    if not expiry or expiry < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Verification OTP has expired. Please request a new one.")
     
     hashed_pwd = get_password_hash(req.new_password)
