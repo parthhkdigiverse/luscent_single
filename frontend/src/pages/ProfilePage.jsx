@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
 import { 
   User, Package, MapPin, LogOut, ExternalLink, 
-  ShoppingBag, ShieldCheck, CheckCircle2, Plus, Edit2, Trash2, Check, X, Building, Home
+  ShoppingBag, ShieldCheck, CheckCircle2, Plus, Edit2, Trash2, Check, X, Building, Home, Star
 } from "lucide-react";
 
 export const ProfilePage = () => {
@@ -37,6 +38,89 @@ export const ProfilePage = () => {
   const [stateName, setStateName] = useState("");
   const [pincode, setPincode] = useState("");
   const [isDefault, setIsDefault] = useState(false);
+
+  // Review State
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewProductId, setReviewProductId] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [userReviews, setUserReviews] = useState({});
+
+  useEffect(() => {
+    const key = `luscent_user_reviews_${user?.email || "guest"}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      setUserReviews(saved);
+    } catch (e) {}
+  }, [user]);
+
+  const handleOpenReviewModal = (productId) => {
+    setReviewProductId(productId);
+    const existing = userReviews[productId];
+    if (existing) {
+      setReviewRating(existing.rating || 5);
+      setReviewTitle(existing.title || "");
+      setReviewComment(existing.comment || "");
+    } else {
+      setReviewRating(5);
+      setReviewTitle("");
+      setReviewComment("");
+    }
+    setShowReviewModal(true);
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewProductId) {
+      alert("Invalid product selection for review.");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const token = localStorage.getItem("luscent_token");
+      const res = await fetch(`${API_URL}/api/reviews`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          product_id: reviewProductId,
+          name: user?.name || "Customer",
+          rating: reviewRating,
+          title: reviewTitle,
+          comment: reviewComment
+        })
+      });
+      if (res.ok) {
+        setShowReviewModal(false);
+        const updated = {
+          ...userReviews,
+          [reviewProductId]: {
+            rating: reviewRating,
+            title: reviewTitle,
+            comment: reviewComment
+          }
+        };
+        setUserReviews(updated);
+        const key = `luscent_user_reviews_${user?.email || "guest"}`;
+        localStorage.setItem(key, JSON.stringify(updated));
+        setSaveSuccess("Review saved successfully!");
+        setTimeout(() => setSaveSuccess(""), 4000);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.detail?.[0]?.msg || errorData.detail || "Failed to submit review";
+        alert(`Failed to submit review: ${msg}`);
+      }
+    } catch (err) {
+      alert("Error submitting review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -369,6 +453,22 @@ export const ProfilePage = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
+                            {order.items?.length > 0 && (() => {
+                              const pid = order.items[0].id || order.items[0].product_id;
+                              const existing = userReviews[pid];
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenReviewModal(pid)}
+                                    className="text-xs font-semibold text-brand-dark hover:text-brand-accent flex items-center gap-1.5 transition cursor-pointer"
+                                  >
+                                    <Star size={13} className="text-amber-500 fill-amber-500" />
+                                    <span>{existing ? `Edit Review (${existing.rating}★)` : "Write Review"}</span>
+                                  </button>
+                                  <span className="text-brand-card/60">|</span>
+                                </>
+                              );
+                            })()}
                             <Link
                               to={`/track?query=${order.order_number}`}
                               className="text-xs font-semibold text-brand-accent hover:text-brand-dark flex items-center gap-1 transition"
@@ -393,7 +493,9 @@ export const ProfilePage = () => {
                                   <span className="text-[11px] text-brand-grey">Qty: {item.quantity} × ₹{item.price}</span>
                                 </div>
                               </div>
-                              <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
+                              <div className="flex flex-col items-end gap-1">
+                                <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -709,6 +811,71 @@ export const ProfilePage = () => {
           </div>
         </div>
       )}
+
+      {/* Write Review Modal */}
+      <AnimatePresence>
+        {showReviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6"
+            >
+              <h3 className="font-serif text-2xl font-semibold text-brand-dark">Write a Review</h3>
+              
+              <form onSubmit={handleReviewSubmit} className="space-y-4 text-sm">
+                <div>
+                  <label className="font-semibold block mb-1">Rating</label>
+                  <div className="flex gap-1 text-2xl cursor-pointer">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span 
+                        key={star} 
+                        onClick={() => setReviewRating(star)}
+                        className={star <= reviewRating ? "text-yellow-500" : "text-brand-card"}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={reviewTitle}
+                    onChange={(e) => setReviewTitle(e.target.value)}
+                    placeholder="Brief summary of your review"
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Comment</label>
+                  <textarea
+                    required
+                    rows="3"
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Tell us what you loved about it..."
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark resize-none"
+                  ></textarea>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowReviewModal(false)}>Cancel</Button>
+                  <Button type="submit" variant="primary" disabled={submittingReview}>
+                    {submittingReview ? "Submitting..." : "Submit Review"}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

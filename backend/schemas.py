@@ -207,3 +207,27 @@ class ContentBlockResponse(ContentBlockBase):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+# Review Schemas
+class ReviewCreate(BaseModel):
+    product_id: str
+    name: str
+    rating: int  # 1 to 5
+    title: str
+    comment: str
+
+class ReviewUpdate(BaseModel):
+    product_id: Optional[str] = None
+    name: Optional[str] = None
+    rating: Optional[int] = None
+    title: Optional[str] = None
+    comment: Optional[str] = None
+
+class ReviewResponse(ReviewCreate):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    user_id: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True

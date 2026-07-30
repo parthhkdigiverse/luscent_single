@@ -15,13 +15,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, reviews_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
     ContactCreate, ContactResponse, CouponBase, CouponResponse,
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
-    ProductCreate, ProductUpdate, OrderStatusUpdate
+    ProductCreate, ProductUpdate, OrderStatusUpdate,
+    ReviewCreate, ReviewUpdate, ReviewResponse
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
 
@@ -970,6 +971,123 @@ async def track_order_public(identifier: str):
             } for item in order.get("items", [])
         ]
     }
+
+# --- Reviews Routes ---
+@app.post("/api/reviews", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+async def create_review(review_in: ReviewCreate, current_user: dict = Depends(get_current_user_optional)):
+    review_dict = review_in.dict()
+    review_dict["created_at"] = datetime.now(timezone.utc)
+    if current_user:
+        review_dict["user_id"] = str(current_user["_id"])
+    result = await reviews_collection.insert_one(review_dict)
+    
+    # Update average rating and reviews count on the product
+    # Note: We aggregate reviews to get the new average
+    cursor = reviews_collection.find({"product_id": review_in.product_id})
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    
+    if reviews:
+        avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+        await products_collection.update_one(
+            {"id": review_in.product_id},
+            {"$set": {"rating": avg_rating}}
+        )
+    
+    review_dict["_id"] = result.inserted_id
+    return review_dict
+
+@app.get("/api/reviews/product/{product_id}", response_model=List[ReviewResponse])
+async def get_product_reviews(product_id: str):
+    cursor = reviews_collection.find({"product_id": product_id}).sort("created_at", -1)
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    return reviews
+
+@app.get("/api/admin/reviews", response_model=List[ReviewResponse])
+async def get_all_reviews(current_user: dict = Depends(get_admin_user)):
+    cursor = reviews_collection.find().sort("created_at", -1)
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    return reviews
+
+@app.put("/api/admin/reviews/{review_id}", response_model=ReviewResponse)
+async def update_review(review_id: str, review_in: ReviewUpdate, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(review_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid review ID")
+        
+    existing_review = await reviews_collection.find_one({"_id": obj_id})
+    if not existing_review:
+        raise HTTPException(status_code=404, detail="Review not found")
+        
+    update_data = {k: v for k, v in review_in.dict().items() if v is not None}
+    if update_data:
+        await reviews_collection.update_one({"_id": obj_id}, {"$set": update_data})
+        
+    updated_review = await reviews_collection.find_one({"_id": obj_id})
+    
+    # Recalculate average rating for target products
+    target_product_ids = set([existing_review.get("product_id"), updated_review.get("product_id")])
+    for pid in target_product_ids:
+        if pid:
+            cursor = reviews_collection.find({"product_id": pid})
+            reviews = [r async for r in cursor]
+            if reviews:
+                avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+                await products_collection.update_one(
+                    {"id": pid},
+                    {"$set": {"rating": round(avg_rating, 1)}}
+                )
+            else:
+                await products_collection.update_one(
+                    {"id": pid},
+                    {"$set": {"rating": 5.0}}
+                )
+                
+    return updated_review
+
+@app.delete("/api/admin/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_review(review_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(review_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid review ID")
+        
+    # Get the product_id before deleting so we can update the average rating
+    review = await reviews_collection.find_one({"_id": obj_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+        
+    await reviews_collection.delete_one({"_id": obj_id})
+    
+    # Update product average rating
+    product_id = review["product_id"]
+    cursor = reviews_collection.find({"product_id": product_id})
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+        
+    if reviews:
+        avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+        await products_collection.update_one(
+            {"id": product_id},
+            {"$set": {"rating": avg_rating}}
+        )
+    else:
+        # No reviews left, set back to default or 0
+        await products_collection.update_one(
+            {"id": product_id},
+            {"$set": {"rating": 5.0}} # Default to 5.0
+        )
+        
+    return {"message": "Review deleted"}
 
 # --- Serve Frontend in Production ---
 if os.getenv("APP_ENV") == "production":
