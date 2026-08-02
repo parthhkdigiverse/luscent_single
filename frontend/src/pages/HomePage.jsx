@@ -133,7 +133,7 @@ export const HomePage = () => {
     <div className="pt-20 pb-12 overflow-x-hidden">
       {/* 1. Full-Screen Widescreen Hero Banner (Slideshow) */}
       <section className="w-full">
-        <div className="relative w-full overflow-hidden aspect-[16/9] md:aspect-[21/9] bg-brand-bg">
+        <div className="relative w-full overflow-hidden aspect-[21/9] bg-brand-bg">
           {/* Active Banner Slide */}
           <Link
             to={heroSlides[activeSlide].link}
@@ -152,7 +152,7 @@ export const HomePage = () => {
               }}
             />
             {/* Elegant Text Overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 bg-black/30 md:bg-black/20">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
               {heroSlides[activeSlide].tag && (
                 <span className="text-white/90 text-xs md:text-sm font-bold tracking-[0.2em] uppercase mb-4 md:mb-6 bg-black/20 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
                   {heroSlides[activeSlide].tag}
