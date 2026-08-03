@@ -1942,6 +1942,17 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   const [localContact, setLocalContact] = useState(contactInfo);
   const [localAuthPoster, setLocalAuthPoster] = useState(authPoster);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState("hero");
+
+  const tabs = [
+    { id: "hero", label: "Hero Carousel Slides" },
+    { id: "banner", label: "Homepage Banner" },
+    { id: "testimonials", label: "Testimonials" },
+    { id: "faq", label: "FAQ Categories" },
+    { id: "story", label: "Our Story Page" },
+    { id: "contact", label: "Contact Info" },
+    { id: "auth", label: "Login / Signup Poster" },
+  ];
 
   // Sync with parent when contentBlocks change
   React.useEffect(() => {
@@ -2021,8 +2032,29 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
         )}
       </AnimatePresence>
 
-      {/* ═══════ 1. HERO SLIDES ═══════ */}
-      <div className={sectionCardClass}>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+        {/* Sidebar Navigation */}
+        <div className="md:col-span-3 space-y-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === tab.id 
+                  ? "bg-brand-dark text-white shadow-md" 
+                  : "bg-white border border-brand-card/40 text-brand-dark hover:bg-brand-bg"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Main Content Area */}
+        <div className="md:col-span-9 space-y-8">
+          {/* ═══════ 1. HERO SLIDES ═══════ */}
+          {activeTab === "hero" && (
+            <div className={sectionCardClass}>
         <div className={sectionTitleClass}>
           <span>Hero Carousel Slides ({localHero.length})</span>
           <button onClick={addHeroSlide} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1">
@@ -2054,9 +2086,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 2. HOMEPAGE BANNER ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "banner" && (
+        <div className={sectionCardClass}>
         <h4 className={sectionTitleClass}>Homepage "Our Essentials" Banner Text</h4>
         <div><label className={labelClass}>Heading</label><input type="text" value={localBanner.title} onChange={(e) => setLocalBanner({ ...localBanner, title: e.target.value })} className={inputClass} /></div>
         <div><label className={labelClass}>Subtitle</label><textarea rows={2} value={localBanner.subtitle} onChange={(e) => setLocalBanner({ ...localBanner, subtitle: e.target.value })} className={inputClass + " resize-none"} /></div>
@@ -2066,9 +2100,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 3. TESTIMONIALS ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "testimonials" && (
+        <div className={sectionCardClass}>
         <div className={sectionTitleClass}>
           <span>Customer Testimonials ({localTestimonials.length})</span>
           <button onClick={addTestimonial} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1">
@@ -2102,9 +2138,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 4. FAQ CATEGORIES ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "faq" && (
+        <div className={sectionCardClass}>
         <div className={sectionTitleClass}>
           <span>FAQ Categories ({localFAQ.length})</span>
           <button onClick={addFAQCategory} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1">
@@ -2151,9 +2189,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 5. OUR STORY ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "story" && (
+        <div className={sectionCardClass}>
         <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-brand-card/30 pb-3 mb-4">
           <h4 className="font-serif text-sm font-semibold text-brand-dark flex items-center">Our Story Page Content</h4>
           <Button 
@@ -2249,9 +2289,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 6. CONTACT INFO ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "contact" && (
+        <div className={sectionCardClass}>
         <h4 className={sectionTitleClass}>Contact & Manufacturer Details</h4>
         <div className="grid grid-cols-2 gap-4">
           <div><label className={labelClass}>Support Email</label><input type="email" value={localContact.email} onChange={(e) => setLocalContact({ ...localContact, email: e.target.value })} className={inputClass} /></div>
@@ -2264,9 +2306,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
 
       {/* ═══════ 7. AUTH POSTER ═══════ */}
-      <div className={sectionCardClass}>
+      {activeTab === "auth" && (
+        <div className={sectionCardClass}>
         <h4 className={sectionTitleClass}>Login / Signup Poster</h4>
         <div className="space-y-4">
           <ImageUploader 
@@ -2283,6 +2327,10 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
+
+        </div> {/* End of Main Content Area */}
+      </div> {/* End of Grid Layout */}
     </div>
   );
 };
