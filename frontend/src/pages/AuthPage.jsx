@@ -1,10 +1,34 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthForm } from "../components/AuthForm";
 import { Sparkles, Heart } from "lucide-react";
+import { API_URL } from "../config";
 
 export const AuthPage = () => {
   const navigate = useNavigate();
+
+  const [posterData, setPosterData] = useState({
+    image: "/images/combo.png",
+    tagline: "Powerful Protection. Effective Gentle Care.",
+    description: "Formulated in clinical labs to protect and cleanse your skin without compromise."
+  });
+
+  useEffect(() => {
+    const fetchPoster = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/content/auth_poster`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content) {
+            setPosterData(data.content);
+          }
+        }
+      } catch (err) {
+        console.warn("Content API not available:", err.message);
+      }
+    };
+    fetchPoster();
+  }, []);
 
   const handleSuccess = () => {
     // Check if we came from checkout
@@ -27,7 +51,7 @@ export const AuthPage = () => {
 
           <div className="my-auto py-8 flex items-center justify-center">
             <img
-              src="/images/combo.png"
+              src={posterData.image}
               alt="Luscent Glow Combo"
               className="max-h-64 object-contain drop-shadow-2xl hover:scale-105 transition-transform duration-500"
             />
@@ -35,10 +59,10 @@ export const AuthPage = () => {
           
           <div className="text-left w-full space-y-2">
             <p className="text-[10px] uppercase tracking-widest text-brand-accent font-bold">
-              Powerful Protection. Effective Gentle Care.
+              {posterData.tagline}
             </p>
             <p className="text-xs text-brand-dark/70 leading-relaxed">
-              Formulated in clinical labs to protect and cleanse your skin without compromise.
+              {posterData.description}
             </p>
           </div>
         </div>

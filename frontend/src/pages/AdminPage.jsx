@@ -1905,6 +1905,9 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
 
   // Contact Info
   const contactInfo = contentBlocks.contact_info || { email: "theluscentglow@gmail.com", phone: "+91 63521 63607", address: "Mfg. by Basilica Biotech, Surat, Gujarat, India." };
+  
+  // Auth Poster
+  const authPoster = contentBlocks.auth_poster || { image: "/images/combo.png", tagline: "Powerful Protection. Effective Gentle Care.", description: "Formulated in clinical labs to protect and cleanse your skin without compromise." };
 
   // ─── Generic save helper ───
   const saveSection = async (sectionKey, content) => {
@@ -1937,6 +1940,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   const [localFAQ, setLocalFAQ] = useState(faqCategories);
   const [localStory, setLocalStory] = useState(ourStory);
   const [localContact, setLocalContact] = useState(contactInfo);
+  const [localAuthPoster, setLocalAuthPoster] = useState(authPoster);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
 
   // Sync with parent when contentBlocks change
@@ -1947,6 +1951,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     if (contentBlocks.faq_categories) setLocalFAQ(contentBlocks.faq_categories);
     if (contentBlocks.our_story) setLocalStory(contentBlocks.our_story);
     if (contentBlocks.contact_info) setLocalContact(contentBlocks.contact_info);
+    if (contentBlocks.auth_poster) setLocalAuthPoster(contentBlocks.auth_poster);
   }, [contentBlocks]);
 
   // ─── Hero Slide Helpers ───
@@ -2256,6 +2261,25 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
         <div className="flex justify-end">
           <Button onClick={() => saveSection("contact_info", localContact)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
             {contentSaving ? "Saving..." : "Save Contact Info"}
+          </Button>
+        </div>
+      </div>
+
+      {/* ═══════ 7. AUTH POSTER ═══════ */}
+      <div className={sectionCardClass}>
+        <h4 className={sectionTitleClass}>Login / Signup Poster</h4>
+        <div className="space-y-4">
+          <ImageUploader 
+            label="Poster Image" 
+            value={localAuthPoster.image} 
+            onChange={(url) => setLocalAuthPoster({ ...localAuthPoster, image: url })} 
+          />
+          <div><label className={labelClass}>Tagline</label><input type="text" value={localAuthPoster.tagline} onChange={(e) => setLocalAuthPoster({ ...localAuthPoster, tagline: e.target.value })} className={inputClass} /></div>
+          <div><label className={labelClass}>Description</label><textarea value={localAuthPoster.description} onChange={(e) => setLocalAuthPoster({ ...localAuthPoster, description: e.target.value })} className={inputClass} rows={3} /></div>
+        </div>
+        <div className="flex justify-end mt-4">
+          <Button onClick={() => saveSection("auth_poster", localAuthPoster)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
+            {contentSaving ? "Saving..." : "Save Auth Poster"}
           </Button>
         </div>
       </div>
