@@ -20,6 +20,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { CategoryPage } from "./pages/CategoryPage";
 import { TrackPage } from "./pages/TrackPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { PolicyPage } from "./pages/PolicyPage";
 
 // Scroll to top on route change helper
 const ScrollToTop = () => {
@@ -56,6 +57,7 @@ const AppContent = () => {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/track" element={<TrackPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/policies/:policyId" element={<PolicyPage />} />
           <Route path="/category/:categoryName" element={<CategoryPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>

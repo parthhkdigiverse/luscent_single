@@ -167,17 +167,25 @@ export const Footer = () => {
           <span className="flex items-center gap-1 justify-center"><ShieldCheck size={10} className="text-brand-accent" /> Clinical Quality</span>
         </div>
 
-        {/* Payment Icons Mock */}
-        <div className="flex items-center gap-2.5">
-          <span className="bg-white/5 px-2 py-1 rounded">UPI</span>
-          <span className="bg-white/5 px-2 py-1 rounded">Visa</span>
-          <span className="bg-white/5 px-2 py-1 rounded">Mastercard</span>
-          <span className="bg-white/5 px-2 py-1 rounded">COD</span>
+        <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-center">
+          <Link to="/policies/privacy-policy" className="hover:text-brand-accent transition-colors">Privacy Policy</Link>
+          <Link to="/policies/terms-of-service" className="hover:text-brand-accent transition-colors">Terms of Service</Link>
+          <Link to="/policies/refund-policy" className="hover:text-brand-accent transition-colors">Refund Policy</Link>
+          <Link to="/policies/shipping-policy" className="hover:text-brand-accent transition-colors">Shipping Policy</Link>
         </div>
 
-        <p className="text-center">
-          &copy; {new Date().getFullYear()} Luscent Glow. All rights reserved.
-        </p>
+        <div className="flex flex-col items-center sm:items-end gap-2">
+          {/* Payment Icons Mock */}
+          <div className="flex items-center gap-2.5">
+            <span className="bg-white/5 px-2 py-1 rounded">UPI</span>
+            <span className="bg-white/5 px-2 py-1 rounded">Visa</span>
+            <span className="bg-white/5 px-2 py-1 rounded">Mastercard</span>
+            <span className="bg-white/5 px-2 py-1 rounded">COD</span>
+          </div>
+          <p className="text-center sm:text-right">
+            &copy; {new Date().getFullYear()} Luscent Glow. All rights reserved.
+          </p>
+        </div>
       </div>
     </footer>
   );
