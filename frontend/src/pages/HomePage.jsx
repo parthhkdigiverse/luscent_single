@@ -10,6 +10,7 @@ import { TrustBadgeStrip } from "../components/TrustBadgeStrip";
 import { TestimonialCard } from "../components/TestimonialCard";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { ScrollReveal } from "../components/ScrollReveal";
+import { BeforeAfterComparison } from "../components/BeforeAfterComparison";
 import { API_URL } from "../config";
 
 const defaultHeroSlides = [
@@ -47,6 +48,8 @@ export const HomePage = () => {
   const [bannerText, setBannerText] = useState({ title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." });
   const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
   const [faqList, setFaqList] = useState(staticFaqs);
+  const [beforeImage, setBeforeImage] = useState("/before-skin.png");
+  const [afterImage, setAfterImage] = useState("/after-skin.png");
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -73,6 +76,10 @@ export const HomePage = () => {
           if (data.homepage_banner) setBannerText(data.homepage_banner);
           if (data.testimonials) setTestimonialsList(data.testimonials);
           if (data.faq_categories) setFaqList(data.faq_categories);
+          if (data.before_after) {
+            if (data.before_after.beforeImage) setBeforeImage(data.before_after.beforeImage);
+            if (data.before_after.afterImage) setAfterImage(data.before_after.afterImage);
+          }
         }
       } catch (err) {
         console.warn("Content API not available, using static defaults:", err.message);
@@ -346,7 +353,28 @@ export const HomePage = () => {
         </div>
       </section>
 
-      {/* 8. Customer Testimonials */}
+      {/* 8. Before & After */}
+      <section className="max-w-7xl mx-auto px-6 mt-24">
+        <div className="text-center max-w-2xl mx-auto mb-16">
+          <span className="text-[10px] tracking-widest uppercase font-semibold text-brand-grey mb-2 block">
+            PROVEN RESULTS
+          </span>
+          <h2 className="font-serif text-3xl md:text-4xl font-medium text-brand-dark mb-4">
+            Visible Transformation
+          </h2>
+          <p className="text-xs md:text-sm text-brand-grey">
+            See the difference our clinical actives make with consistent daily use.
+          </p>
+        </div>
+        <ScrollReveal>
+          <BeforeAfterComparison 
+            beforeImage={beforeImage} 
+            afterImage={afterImage} 
+          />
+        </ScrollReveal>
+      </section>
+
+      {/* 9. Customer Testimonials */}
       <section className="max-w-7xl mx-auto px-6 mt-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="text-[10px] tracking-widest uppercase font-semibold text-brand-grey mb-2 block">

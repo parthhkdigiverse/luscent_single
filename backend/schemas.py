@@ -188,6 +188,8 @@ class SettingsBase(BaseModel):
     social_twitter: Optional[str] = ""
     social_youtube: Optional[str] = ""
     online_payment_enabled: bool = True
+    before_image: Optional[str] = "/before-skin.png"
+    after_image: Optional[str] = "/after-skin.png"
 
 class SettingsResponse(SettingsBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)

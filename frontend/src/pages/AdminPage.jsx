@@ -69,6 +69,8 @@ export const AdminPage = () => {
   const [socialTwitter, setSocialTwitter] = useState("");
   const [socialYoutube, setSocialYoutube] = useState("");
   const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(true);
+  const [beforeImage, setBeforeImage] = useState("");
+  const [afterImage, setAfterImage] = useState("");
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
 
@@ -245,6 +247,8 @@ export const AdminPage = () => {
         setSocialTwitter(settingsData.social_twitter || "");
         setSocialYoutube(settingsData.social_youtube || "");
         setOnlinePaymentEnabled(settingsData.online_payment_enabled !== false);
+        setBeforeImage(settingsData.before_image || "/before-skin.png");
+        setAfterImage(settingsData.after_image || "/after-skin.png");
       }
 
       // CMS Content Blocks
@@ -491,7 +495,9 @@ export const AdminPage = () => {
       social_facebook: socialFacebook,
       social_twitter: socialTwitter,
       social_youtube: socialYoutube,
-      online_payment_enabled: onlinePaymentEnabled
+      online_payment_enabled: onlinePaymentEnabled,
+      before_image: beforeImage,
+      after_image: afterImage
     };
 
     try {
@@ -1941,6 +1947,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   const [localStory, setLocalStory] = useState(ourStory);
   const [localContact, setLocalContact] = useState(contactInfo);
   const [localAuthPoster, setLocalAuthPoster] = useState(authPoster);
+  const [localBeforeAfter, setLocalBeforeAfter] = useState(contentBlocks.before_after || { beforeImage: "/before-skin.png", afterImage: "/after-skin.png" });
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [activeTab, setActiveTab] = useState("hero");
 
@@ -1952,6 +1959,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     { id: "story", label: "Our Story Page" },
     { id: "contact", label: "Contact Info" },
     { id: "auth", label: "Login / Signup Poster" },
+    { id: "before_after", label: "Before & After Images" },
   ];
 
   // Sync with parent when contentBlocks change
@@ -1963,6 +1971,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     if (contentBlocks.our_story) setLocalStory(contentBlocks.our_story);
     if (contentBlocks.contact_info) setLocalContact(contentBlocks.contact_info);
     if (contentBlocks.auth_poster) setLocalAuthPoster(contentBlocks.auth_poster);
+    if (contentBlocks.before_after) setLocalBeforeAfter(contentBlocks.before_after);
   }, [contentBlocks]);
 
   // ─── Hero Slide Helpers ───
@@ -2327,6 +2336,30 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           </Button>
         </div>
       </div>
+      )}
+
+      {/* ═══════ 8. BEFORE & AFTER IMAGES ═══════ */}
+      {activeTab === "before_after" && (
+        <div className={sectionCardClass}>
+          <h4 className={sectionTitleClass}>Before & After Images</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            <ImageUploader 
+              label="Before Image (Slider)" 
+              value={localBeforeAfter.beforeImage} 
+              onChange={(url) => setLocalBeforeAfter({ ...localBeforeAfter, beforeImage: url })} 
+            />
+            <ImageUploader 
+              label="After Image (Slider)" 
+              value={localBeforeAfter.afterImage} 
+              onChange={(url) => setLocalBeforeAfter({ ...localBeforeAfter, afterImage: url })} 
+            />
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => saveSection("before_after", localBeforeAfter)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
+              {contentSaving ? "Saving..." : "Save Images"}
+            </Button>
+          </div>
+        </div>
       )}
 
         </div> {/* End of Main Content Area */}

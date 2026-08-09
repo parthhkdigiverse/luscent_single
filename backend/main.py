@@ -784,7 +784,9 @@ async def get_public_settings():
         "social_twitter": settings.get("social_twitter", ""),
         "social_youtube": settings.get("social_youtube", ""),
         "online_payment_enabled": settings.get("online_payment_enabled", True),
-        "active_gateway": settings.get("active_gateway", "cashfree")
+        "active_gateway": settings.get("active_gateway", "cashfree"),
+        "before_image": settings.get("before_image", "/before-skin.png"),
+        "after_image": settings.get("after_image", "/after-skin.png")
     }
 
 @app.post("/api/admin/settings")
