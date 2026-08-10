@@ -19,6 +19,7 @@ export const ProductPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -35,6 +36,19 @@ export const ProductPage = () => {
         if (resAll.ok) {
           const allData = await resAll.json();
           setAllProducts(allData);
+        }
+
+        // Fetch reviews
+        if (data && data.id) {
+          try {
+            const revRes = await fetch(`${API_URL}/api/reviews/product/${data.id}`);
+            if (revRes.ok) {
+              const revData = await revRes.json();
+              setReviews(revData);
+            }
+          } catch (e) {
+            console.error("Failed to fetch reviews");
+          }
         }
       } catch (err) {
         console.warn("FastAPI backend not available:", err.message);
@@ -103,11 +117,18 @@ export const ProductPage = () => {
           </div>
 
           {/* Rating */}
-          <div className="flex items-center gap-2">
+          <div 
+            className="flex items-center gap-2 cursor-pointer group hover:opacity-80 transition-opacity" 
+            onClick={() => {
+              const elem = document.getElementById("reviews-section");
+              if (elem) {
+                elem.scrollIntoView({ behavior: "smooth", block: "start" });
+              }
+            }}
+          >
             <RatingStars rating={product.rating || 5} size={14} />
-            <span className="text-xs font-semibold text-brand-dark">{product.rating || "5.0"}</span>
-            <span className="text-xs text-brand-grey">
-              ({product.id === "combo" ? "12" : "48"} verified reviews)
+            <span className="text-xs font-semibold text-brand-dark group-hover:underline">
+              {(product.rating ? parseFloat(product.rating).toFixed(1) : "5.0")} ({reviews.length} {reviews.length === 1 ? 'review' : 'reviews'})
             </span>
           </div>
 
@@ -295,6 +316,57 @@ export const ProductPage = () => {
             </div>
           )}
         </div>
+      </section>
+
+      {/* Customer Reviews Section (Compact Space-Saving Layout) */}
+      <section id="reviews-section" className="border-t border-brand-card/30 pt-8 text-left max-w-4xl scroll-mt-24">
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="font-serif text-lg font-semibold text-brand-dark">
+              Customer Reviews
+            </h2>
+            <span className="text-xs px-2.5 py-0.5 bg-brand-dark/5 border border-brand-card/40 rounded-full font-semibold text-brand-dark">
+              ★ {product.rating ? Number(product.rating).toFixed(1) : "5.0"} ({reviews.length})
+            </span>
+          </div>
+        </div>
+
+        {reviews.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-brand-card/40 p-4 text-center text-xs text-brand-grey">
+            No reviews yet for this product.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {reviews.map((rev, idx) => (
+              <div 
+                key={rev._id || rev.id || idx} 
+                className="bg-white border border-brand-card/40 rounded-xl p-3 shadow-sm hover:border-brand-dark/30 transition-all text-xs flex flex-col justify-between gap-1"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-brand-card/20 pb-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="w-5 h-5 rounded-full bg-brand-dark text-white font-bold text-[9px] flex items-center justify-center flex-shrink-0 uppercase">
+                      {(rev.name || "C")[0]}
+                    </span>
+                    <span className="font-semibold text-xs text-brand-dark truncate">{rev.name || "Verified Customer"}</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-amber-500 font-bold text-xs">★ {rev.rating}</span>
+                    <span className="text-[9px] text-brand-grey">
+                      • {rev.created_at ? new Date(rev.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" }) : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="pt-0.5">
+                  {rev.title && (
+                    <strong className="text-brand-dark text-xs block truncate">{rev.title}</strong>
+                  )}
+                  <p className="text-brand-grey text-[11px] leading-tight line-clamp-2 mt-0.5">{rev.comment}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* You May Also Like (Cross Sell) */}

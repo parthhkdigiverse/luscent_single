@@ -67,7 +67,7 @@ export const Navbar = () => {
           <nav className="hidden lg:flex items-center gap-8">
             {location.pathname.startsWith("/admin") && !!sessionStorage.getItem("luscent_admin_token") ? (
               <>
-                {["Overview", "Orders", "Products", "Users", "Coupons", "Integrations", "Content"].map((tab) => {
+                {["Overview", "Orders", "Products", "Users", "Coupons", "Integrations", "Content", "Inquiries", "Reviews"].map((tab) => {
                   const tabLower = tab.toLowerCase();
                   const searchParams = new URLSearchParams(location.search);
                   const activeTab = searchParams.get("tab") || "overview";
@@ -232,7 +232,7 @@ export const Navbar = () => {
             <nav className="flex flex-col gap-4">
               {location.pathname.startsWith("/admin") && !!sessionStorage.getItem("luscent_admin_token") ? (
                 <>
-                  {["Overview", "Orders", "Products", "Users", "Coupons", "Integrations", "Content"].map((tab) => {
+                  {["Overview", "Orders", "Products", "Users", "Coupons", "Integrations", "Content", "Inquiries", "Reviews"].map((tab) => {
                     const tabLower = tab.toLowerCase();
                     const searchParams = new URLSearchParams(location.search);
                     const activeTab = searchParams.get("tab") || "overview";
