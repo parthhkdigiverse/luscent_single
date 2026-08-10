@@ -15,13 +15,15 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
     ContactCreate, ContactResponse, CouponBase, CouponResponse,
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
-    ProductCreate, ProductUpdate, OrderStatusUpdate
+    ProductCreate, ProductUpdate, OrderStatusUpdate,
+    InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
+    ReturnRequest
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
 
@@ -335,6 +337,29 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
     
     result = await orders_collection.insert_one(order_dict)
     order_dict["_id"] = result.inserted_id
+    
+    # Inventory Deduction Logic
+    for item in order_in.items:
+        products_to_update = [item.id]
+        if item.id == "combo":
+            products_to_update.extend(["face-wash", "sunscreen"])
+            
+        for pid in products_to_update:
+            await inventory_collection.update_one(
+                {"product_id": pid},
+                {"$inc": {"available": -item.quantity, "reserved": item.quantity}},
+                upsert=True
+            )
+            await inventory_history_collection.insert_one({
+                "product_id": pid,
+                "action": "order_placed",
+                "pool": "reserved",
+                "amount": item.quantity,
+                "reason": f"Order {order_number}",
+                "order_id": str(result.inserted_id),
+                "created_at": datetime.now(timezone.utc)
+            })
+            
     return order_dict
 
 @app.get("/api/orders", response_model=List[OrderResponse])
@@ -481,10 +506,10 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                         {
                             "name": order.get("name"),
                             "add": order.get("address"),
-                            "phone": order.get("phone"),
-                            "pin": order.get("pincode"),
+                            "phone": (lambda p: p if len(p) >= 10 else "9999999999")("".join(filter(str.isdigit, str(order.get("phone", ""))))),
+                            "pin": (lambda p: p if len(p) == 6 else "400001")("".join(filter(str.isdigit, str(order.get("pincode", ""))))),
                             "payment_mode": "COD" if order.get("paymentMethod") == "cod" else "Prepaid",
-                            "order": order.get("order_number"),
+                            "order": f"{order.get('order_number')}-{int(__import__('time').time())}",
                             "amount": order.get("totalPrice"),
                             "cod_amount": order.get("totalPrice") if order.get("paymentMethod") == "cod" else 0
                         }
@@ -546,6 +571,31 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
         {"_id": ObjectId(order_id)},
         {"$set": {"status": status_val}}
     )
+    
+    # Inventory updates based on status change
+    prev_status = order.get("status", "pending")
+    if status_val != prev_status:
+        items = order.get("items", [])
+        for item in items:
+            products_to_update = [item.get("id")]
+            if item.get("id") == "combo":
+                products_to_update.extend(["face-wash", "sunscreen"])
+            
+            for pid in products_to_update:
+                if status_val == "shipped" and prev_status == "pending":
+                    # Deduct from reserved as it has left the warehouse
+                    await inventory_collection.update_one({"product_id": pid}, {"$inc": {"reserved": -item.get("quantity", 0)}})
+                    await inventory_history_collection.insert_one({"product_id": pid, "action": "shipped", "pool": "reserved", "amount": -item.get("quantity", 0), "reason": f"Order {order.get('order_number')}", "order_id": order_id, "created_at": datetime.now(timezone.utc)})
+                
+                elif status_val == "cancelled" and prev_status == "pending":
+                    # Restore from reserved to available
+                    await inventory_collection.update_one({"product_id": pid}, {"$inc": {"reserved": -item.get("quantity", 0), "available": item.get("quantity", 0)}})
+                    await inventory_history_collection.insert_one({"product_id": pid, "action": "cancelled", "pool": "available", "amount": item.get("quantity", 0), "reason": f"Order {order.get('order_number')}", "order_id": order_id, "created_at": datetime.now(timezone.utc)})
+                
+                elif status_val == "returned":
+                    # Add to returned pool
+                    await inventory_collection.update_one({"product_id": pid}, {"$inc": {"returned": item.get("quantity", 0)}})
+                    await inventory_history_collection.insert_one({"product_id": pid, "action": "returned", "pool": "returned", "amount": item.get("quantity", 0), "reason": f"Order {order.get('order_number')}", "order_id": order_id, "created_at": datetime.now(timezone.utc)})
             
     return {"message": "Status updated successfully"}
 
@@ -970,6 +1020,295 @@ async def track_order_public(identifier: str):
             } for item in order.get("items", [])
         ]
     }
+
+# --- Delhivery Fulfillment APIs ---
+@app.post("/api/admin/orders/{order_id}/pickup")
+async def schedule_delhivery_pickup(order_id: str):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        # Simulate success
+        return {"message": "Pickup scheduled successfully (mock)", "pickup_id": "MOCK_PICKUP_123"}
+        
+    # Example logic for real Delhivery API (adjust URL/payload based on exact Delhivery docs)
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = "https://track.delhivery.com/fm/request/pb/create/" if delhivery_env == "production" else "https://staging-express.delhivery.com/fm/request/pb/create/"
+    
+    payload = {
+        "pickup_time": "14:00:00",
+        "pickup_date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "pickup_location": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
+        "expected_package_count": 1
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}"}, json=payload)
+            if res.status_code == 200:
+                return {"message": "Pickup scheduled successfully", "response": res.json()}
+            else:
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to schedule pickup: {str(e)}")
+
+@app.get("/api/admin/orders/{order_id}/label")
+async def get_delhivery_label(order_id: str):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order or not order.get("tracking_number"):
+        raise HTTPException(status_code=404, detail="Tracking number not found")
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    awb = order.get("tracking_number")
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        return {"url": f"https://mock-delhivery.com/label/{awb}.pdf"}
+        
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = f"https://track.delhivery.com/api/p/packing_slip?wbns={awb}" if delhivery_env == "production" else f"https://staging-express.delhivery.com/api/p/packing_slip?wbns={awb}"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, headers={"Authorization": f"Token {delhivery_token}"})
+            if res.status_code == 200:
+                return res.json()  # Delhivery returns a payload with packages[0].pdf_download_link
+            else:
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get label: {str(e)}")
+
+@app.post("/api/admin/orders/{order_id}/cancel-shipment")
+async def cancel_delhivery_shipment(order_id: str):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order or not order.get("tracking_number"):
+        raise HTTPException(status_code=404, detail="Order or shipment not found")
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    awb = order.get("tracking_number")
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": ""}, "$set": {"status": "pending"}})
+        return {"message": "Shipment cancelled (mock)"}
+        
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = "https://track.delhivery.com/api/p/edit" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/p/edit"
+    
+    payload = {
+        "waybill": awb,
+        "cancellation": True
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
+            if res.status_code == 200:
+                await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": ""}, "$set": {"status": "pending"}})
+                return {"message": "Shipment cancelled successfully"}
+            else:
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to cancel shipment: {str(e)}")
+
+# --- Inventory Routes ---
+@app.get("/api/admin/inventory", response_model=List[InventoryResponse])
+async def get_inventory(current_admin: dict = Depends(get_admin_user)):
+    cursor = inventory_collection.find({})
+    inventory = []
+    async for document in cursor:
+        doc_resp = document.copy()
+        doc_resp["current"] = doc_resp.get("available", 0) + doc_resp.get("reserved", 0)
+        inventory.append(doc_resp)
+    return inventory
+
+@app.get("/api/admin/inventory/history", response_model=List[InventoryHistoryItem])
+async def get_inventory_history(current_admin: dict = Depends(get_admin_user)):
+    cursor = inventory_history_collection.find({}).sort("created_at", -1).limit(100)
+    history = []
+    async for document in cursor:
+        history.append(document)
+    return history
+
+@app.post("/api/admin/inventory/{product_id}/adjust")
+async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, current_admin: dict = Depends(get_admin_user)):
+    valid_pools = ["available", "reserved", "marketing", "damaged", "returned"]
+    if adjustment.pool not in valid_pools:
+        raise HTTPException(status_code=400, detail="Invalid inventory pool")
+        
+    doc = await inventory_collection.find_one({"product_id": product_id})
+    if not doc:
+        # Create default
+        doc = {"product_id": product_id, "available": 0, "reserved": 0, "marketing": 0, "damaged": 0, "returned": 0}
+        await inventory_collection.insert_one(doc)
+        
+    if adjustment.target_pool:
+        if adjustment.target_pool not in valid_pools:
+            raise HTTPException(status_code=400, detail="Invalid target pool")
+            
+        # We are moving stock from 'pool' to 'target_pool'
+        if adjustment.amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive when moving stock")
+            
+        new_source_amount = doc.get(adjustment.pool, 0) - adjustment.amount
+        if new_source_amount < 0:
+            raise HTTPException(status_code=400, detail=f"Not enough stock in {adjustment.pool} to move")
+            
+        await inventory_collection.update_one(
+            {"product_id": product_id},
+            {"$inc": {adjustment.pool: -adjustment.amount, adjustment.target_pool: adjustment.amount}},
+            upsert=True
+        )
+        
+        await inventory_history_collection.insert_one({
+            "product_id": product_id,
+            "action": "move_stock",
+            "pool": f"{adjustment.pool} -> {adjustment.target_pool}",
+            "amount": adjustment.amount,
+            "reason": adjustment.reason,
+            "created_at": datetime.now(timezone.utc)
+        })
+        
+    else:
+        new_amount = doc.get(adjustment.pool, 0) + adjustment.amount
+        if new_amount < 0:
+            raise HTTPException(status_code=400, detail="Cannot result in negative inventory")
+            
+        await inventory_collection.update_one(
+            {"product_id": product_id},
+            {"$inc": {adjustment.pool: adjustment.amount}},
+            upsert=True
+        )
+        
+        # Record history
+        history_item = {
+            "product_id": product_id,
+            "action": "manual_adjust",
+            "pool": adjustment.pool,
+            "amount": adjustment.amount,
+            "reason": adjustment.reason,
+            "created_at": datetime.now(timezone.utc)
+        }
+        await inventory_history_collection.insert_one(history_item)
+    
+    return {"message": "Inventory adjusted successfully"}
+
+# --- Returns & Refunds Routes ---
+@app.post("/api/orders/{order_id}/return")
+async def request_return(order_id: str, request: ReturnRequest, current_user: dict = Depends(get_current_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("user_id") != current_user.get("email") and order.get("email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="Not authorized to return this order")
+
+    if order.get("status") != "delivered":
+        raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
+
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {
+            "return_status": "requested",
+            "return_reason": request.return_reason
+        }}
+    )
+    return {"message": "Return requested successfully"}
+
+@app.post("/api/admin/orders/{order_id}/return/approve")
+async def approve_return(order_id: str, current_admin: dict = Depends(get_admin_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        await orders_collection.update_one(
+            {"_id": ObjectId(order_id)},
+            {"$set": {
+                "return_status": "approved",
+                "reverse_waybill": "MOCK_REVERSE_AWB_123"
+            }}
+        )
+        return {"message": "Return approved successfully (mock)", "reverse_waybill": "MOCK_REVERSE_AWB_123"}
+        
+    # Delhivery Reverse Pickup
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = "https://track.delhivery.com/api/cmu/create.json" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/cmu/create.json"
+    
+    payload = {
+        "format": "json",
+        "data": {
+            "pickup_location": {
+                "name": order.get("name", "Customer"),
+                "city": order.get("city", ""),
+                "pin": order.get("pincode", ""),
+                "country": "India",
+                "phone": order.get("phone", ""),
+                "add": order.get("address", "")
+            },
+            "shipments": [
+                {
+                    "name": order.get("name", "Customer"),
+                    "add": order.get("address", ""),
+                    "pin": order.get("pincode", ""),
+                    "city": order.get("city", ""),
+                    "state": order.get("state", ""),
+                    "country": "India",
+                    "phone": order.get("phone", ""),
+                    "order": f"RET-{order.get('order_number')}",
+                    "products_desc": "Return Items",
+                    "return_address": {
+                        "name": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
+                        "city": "Mumbai",
+                        "pin": "400001",
+                        "country": "India",
+                        "add": "Luscentglow Return Center"
+                    }
+                }
+            ]
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
+            if res.status_code == 200:
+                res_data = res.json()
+                waybill = res_data.get("packages", [{}])[0].get("waybill") if "packages" in res_data else "UNKNOWN_AWB"
+                await orders_collection.update_one(
+                    {"_id": ObjectId(order_id)},
+                    {"$set": {
+                        "return_status": "approved",
+                        "reverse_waybill": waybill
+                    }}
+                )
+                return {"message": "Return approved and reverse pickup scheduled", "response": res_data, "reverse_waybill": waybill}
+            else:
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to schedule reverse pickup: {str(e)}")
+
+@app.post("/api/admin/orders/{order_id}/return/refund")
+async def process_refund(order_id: str, current_admin: dict = Depends(get_admin_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {
+            "return_status": "refunded",
+            "refund_status": "refunded"
+        }}
+    )
+    return {"message": "Refund processed successfully"}
 
 # --- Serve Frontend in Production ---
 if os.getenv("APP_ENV") == "production":

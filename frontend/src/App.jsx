@@ -40,8 +40,8 @@ const AppContent = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Render Navbar globally */}
-      <Navbar />
+      {/* Render Navbar globally, except on Admin pages where we have a custom sidebar */}
+      {!isAdminPath && <Navbar />}
 
       {/* Main Page Content */}
       <main className="flex-grow bg-[#FAF8F5]">
