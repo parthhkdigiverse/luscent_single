@@ -133,6 +133,12 @@ class OrderResponse(OrderCreate):
     status: str = "pending"
     created_at: datetime
     is_deleted: bool = False
+    tracking_number: Optional[str] = None
+    carrier: Optional[str] = None
+    return_status: Optional[str] = None
+    return_reason: Optional[str] = None
+    reverse_waybill: Optional[str] = None
+    refund_status: Optional[str] = None
 
     class Config:
         populate_by_name = True
@@ -140,6 +146,9 @@ class OrderResponse(OrderCreate):
 
 class OrderStatusUpdate(BaseModel):
     status: str
+
+class ReturnRequest(BaseModel):
+    return_reason: str
 
 # Contact Schemas
 class ContactCreate(BaseModel):
@@ -207,6 +216,43 @@ class ContentBlockBase(BaseModel):
 
 class ContentBlockResponse(ContentBlockBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+# Inventory Schemas
+class InventoryBase(BaseModel):
+    product_id: str
+    available: int = 0
+    reserved: int = 0
+    marketing: int = 0
+    damaged: int = 0
+    returned: int = 0
+
+class InventoryResponse(InventoryBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    current: int = 0 # Computed dynamically usually: available + reserved
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+class InventoryAdjustment(BaseModel):
+    pool: str # available, reserved, marketing, damaged, returned
+    amount: int # can be negative or positive
+    reason: str
+    target_pool: Optional[str] = None
+
+class InventoryHistoryItem(BaseModel):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    product_id: str
+    action: str # "manual_adjust", "order_placed", "order_cancelled", "order_returned"
+    pool: str
+    amount: int
+    reason: str
+    order_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         populate_by_name = True

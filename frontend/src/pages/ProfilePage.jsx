@@ -17,6 +17,12 @@ export const ProfilePage = () => {
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
+  // Return Form State
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [selectedReturnOrder, setSelectedReturnOrder] = useState(null);
+  const [returnReason, setReturnReason] = useState("");
+  const [returnMessage, setReturnMessage] = useState("");
+
   // Profile Details Form State
   const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
@@ -225,6 +231,54 @@ export const ProfilePage = () => {
     e.preventDefault();
     setSaveSuccess("Profile details updated successfully!");
     setTimeout(() => setSaveSuccess(""), 4000);
+  };
+
+  const openReturnModal = (order) => {
+    setSelectedReturnOrder(order);
+    setReturnReason("");
+    setReturnMessage("");
+    setReturnModalOpen(true);
+  };
+
+  const submitReturnRequest = async () => {
+    if (!returnReason.trim()) {
+      setReturnMessage("Please provide a reason for the return.");
+      return;
+    }
+    try {
+      const token = localStorage.getItem("luscent_token");
+      const orderId = selectedReturnOrder._id || selectedReturnOrder.id;
+      if (!orderId) {
+        setReturnMessage("Order ID not found.");
+        return;
+      }
+      
+      const res = await fetch(`${API_URL}/api/orders/${orderId}/return`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ return_reason: returnReason })
+      });
+      
+      if (res.ok) {
+        // Update local state
+        setOrders(orders.map(o => {
+          if (o._id === orderId || o.id === orderId) {
+            return { ...o, return_status: "requested", return_reason: returnReason };
+          }
+          return o;
+        }));
+        setReturnModalOpen(false);
+      } else {
+        const errorData = await res.json();
+        setReturnMessage(errorData.detail || "Failed to request return.");
+      }
+    } catch (err) {
+      console.error(err);
+      setReturnMessage("Error submitting return request.");
+    }
   };
 
   const handleChangePassword = async (e) => {
@@ -537,8 +591,19 @@ export const ProfilePage = () => {
 
                         {/* Order Footer */}
                         <div className="pt-3 border-t border-brand-card/40 flex justify-between items-center text-xs">
-                          <span className="text-brand-grey">
+                          <span className="text-brand-grey flex flex-wrap items-center gap-2">
                             Payment: <strong className="text-brand-dark uppercase text-[11px]">{order.paymentMethod || "COD"}</strong>
+                            
+                            {order.status === "delivered" && !order.return_status && (
+                              <button onClick={() => openReturnModal(order)} className="text-amber-600 hover:text-amber-700 underline text-[11px] font-semibold ml-2">
+                                Request Return
+                              </button>
+                            )}
+                            {order.return_status && (
+                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ml-2 border border-amber-200/50">
+                                Return {order.return_status}
+                              </span>
+                            )}
                           </span>
                           <div>
                             <span className="text-brand-grey">Total: </span>
@@ -868,6 +933,55 @@ export const ProfilePage = () => {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Return Request Modal */}
+      {returnModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-fadeIn">
+            <button
+              onClick={() => setReturnModalOpen(false)}
+              className="absolute top-5 right-5 text-brand-grey hover:text-brand-dark transition bg-brand-bg/50 rounded-full p-1.5"
+            >
+              <X size={18} />
+            </button>
+
+            <h3 className="font-serif text-xl font-semibold text-brand-dark mb-1">Request Return</h3>
+            <p className="text-xs text-brand-grey mb-5">Order #{selectedReturnOrder?.order_number}</p>
+
+            {returnMessage && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-semibold">
+                {returnMessage}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Reason for Return</label>
+                <select 
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="w-full p-3 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
+                >
+                  <option value="">Select a reason</option>
+                  <option value="Damaged product">Product was damaged or defective</option>
+                  <option value="Wrong item">Received wrong item</option>
+                  <option value="Not satisfied">Not satisfied with the product</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-brand-card/30">
+                <Button type="button" onClick={() => setReturnModalOpen(false)} variant="outline" className="py-2 px-4 border text-xs">
+                  Cancel
+                </Button>
+                <Button onClick={submitReturnRequest} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
+                  Submit Request
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}
