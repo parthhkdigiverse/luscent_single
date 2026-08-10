@@ -1536,19 +1536,31 @@ async def delete_review(review_id: str, current_user: dict = Depends(get_admin_u
         
     return {"message": "Review deleted"}
 
-# --- Serve Frontend in Production ---
-if os.getenv("APP_ENV") == "production":
-    dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
-    if os.path.exists(dist_path):
-        app.mount("/", StaticFiles(directory=dist_path, html=True), name="static")
+# --- Serve Frontend ---
+dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
+if os.path.exists(dist_path):
+    # Mount assets directory directly
+    assets_path = os.path.join(dist_path, "assets")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="assets")
         
-        @app.exception_handler(404)
-        async def custom_404_handler(request: Request, __):
-            if request.url.path.startswith("/api/"):
-                return {"detail": "Not Found"}
-            return FileResponse(os.path.join(dist_path, "index.html"))
-    else:
-        print(f"Warning: Production mode enabled but {dist_path} does not exist. Please build the frontend.")
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Ignore API routes
+        if full_path.startswith("api/"):
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail="Not Found")
+            
+        # If the file exists in dist, serve it
+        file_path = os.path.join(dist_path, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+            
+        # Fallback to index.html for React Router
+        index_path = os.path.join(dist_path, "index.html")
+        if os.path.exists(index_path):
+            return FileResponse(index_path)
+        return {"detail": "Frontend not built"}
 
 
 

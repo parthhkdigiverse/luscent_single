@@ -121,6 +121,7 @@ export const AdminPage = () => {
   const [adminReviewRating, setAdminReviewRating] = useState(5);
   const [adminReviewTitle, setAdminReviewTitle] = useState("");
   const [adminReviewComment, setAdminReviewComment] = useState("");
+  const [adminReviewImages, setAdminReviewImages] = useState([]);
   const [submittingAdminReview, setSubmittingAdminReview] = useState(false);
   const [reviewSearchQuery, setReviewSearchQuery] = useState("");
   const [reviewRatingFilter, setReviewRatingFilter] = useState("all");
@@ -744,6 +745,7 @@ export const AdminPage = () => {
     setAdminReviewRating(5);
     setAdminReviewTitle("");
     setAdminReviewComment("");
+    setAdminReviewImages([]);
     setShowAdminReviewModal(true);
   };
 
@@ -754,6 +756,7 @@ export const AdminPage = () => {
     setAdminReviewRating(review.rating || 5);
     setAdminReviewTitle(review.title || "");
     setAdminReviewComment(review.comment || "");
+    setAdminReviewImages(review.images || []);
     setShowAdminReviewModal(true);
   };
 
@@ -765,7 +768,8 @@ export const AdminPage = () => {
       name: adminReviewName,
       rating: adminReviewRating,
       title: adminReviewTitle,
-      comment: adminReviewComment
+      comment: adminReviewComment,
+      images: adminReviewImages
     };
 
     try {
@@ -792,6 +796,7 @@ export const AdminPage = () => {
         setAdminReviewRating(5);
         setAdminReviewTitle("");
         setAdminReviewComment("");
+        setAdminReviewImages([]);
       } else {
         const errData = await res.json().catch(() => ({}));
         alert(errData.detail || "Failed to save review");
@@ -801,6 +806,26 @@ export const AdminPage = () => {
     } finally {
       setSubmittingAdminReview(false);
     }
+  };
+
+  const handleAdminReviewImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    if (adminReviewImages.length + files.length > 3) {
+      alert("You can only upload a maximum of 3 images.");
+      return;
+    }
+    
+    files.forEach(file => {
+      if (file.size > 2 * 1024 * 1024) {
+        alert(`File ${file.name} is larger than 2MB`);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAdminReviewImages(prev => [...prev, e.target.result]);
+      };
+      reader.readAsDataURL(file);
+    });
   };
 
   // Render Login Gate
@@ -2006,6 +2031,15 @@ export const AdminPage = () => {
                               <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
                                 <strong className="text-brand-dark block text-xs mb-0.5">{review.title}</strong>
                                 <span className="text-xs">{review.comment}</span>
+                                {review.images && review.images.length > 0 && (
+                                  <div className="flex gap-2 mt-2">
+                                    {review.images.map((img, i) => (
+                                      <div key={i} className="w-10 h-10 rounded-md overflow-hidden border border-brand-card/30">
+                                        <img src={img} alt="Review attachment" className="w-full h-full object-cover" />
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </td>
                               <td className="p-5 text-center">
                                 <div className="flex items-center justify-center gap-2">
@@ -2042,9 +2076,6 @@ export const AdminPage = () => {
               );
             })()}
 
-            {activeTab === "reviews" && (
-              <ReviewsTab API_URL={API_URL} fetchAuth={fetchAuth} />
-            )}
 
             {activeTab === "content" && (
               <ContentManagerTab
@@ -2210,6 +2241,36 @@ export const AdminPage = () => {
                     placeholder="Detailed feedback about the product experience..."
                     className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark resize-none text-xs"
                   ></textarea>
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Images (Optional, up to 3)</label>
+                  <div className="flex flex-wrap gap-3 mb-1">
+                    {adminReviewImages.map((imgStr, idx) => (
+                      <div key={idx} className="relative w-14 h-14 rounded-xl border border-brand-card/50 overflow-hidden group">
+                        <img src={imgStr} alt="Review" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setAdminReviewImages(adminReviewImages.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {adminReviewImages.length < 3 && (
+                      <label className="w-14 h-14 rounded-xl border-2 border-dashed border-brand-card flex flex-col items-center justify-center text-brand-grey hover:bg-brand-bg/50 cursor-pointer transition">
+                        <Plus size={14} />
+                        <span className="text-[9px] font-bold mt-0.5">Add</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          multiple
+                          onChange={handleAdminReviewImageUpload}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
                 <div className="pt-2 flex justify-end gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowAdminReviewModal(false)} className="text-xs">Cancel</Button>
