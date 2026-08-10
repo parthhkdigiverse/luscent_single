@@ -4,6 +4,10 @@ import random
 import httpx
 from datetime import datetime, timezone
 from typing import List, Optional
+import smtplib
+import ssl
+from email.message import EmailMessage
+from pydantic import BaseModel
 
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -17,13 +21,14 @@ from dotenv import load_dotenv
 
 from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection
 from schemas import (
-    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
+    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
     ContactCreate, ContactResponse, CouponBase, CouponResponse,
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
     ProductCreate, ProductUpdate, OrderStatusUpdate,
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
-    ReviewCreate, ReviewResponse
+    ReviewCreate, ReviewResponse,
+    ReviewCreate, ReviewUpdate, ReviewResponse
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
 
@@ -267,16 +272,55 @@ async def forgot_password(req: ForgotPasswordRequest):
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     from datetime import timedelta
-    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    expiry = datetime.utcnow() + timedelta(minutes=15)
     
     await users_collection.update_one(
         {"email": req.email},
         {"$set": {"reset_otp": otp, "reset_otp_expiry": expiry}}
     )
     
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if all([smtp_server, smtp_user, smtp_pass]):
+        msg = EmailMessage()
+        msg['Subject'] = "Luscent Glow - Password Reset OTP"
+        msg['From'] = f"Luscent Glow <{sender_email}>"
+        msg['To'] = req.email
+
+        msg.set_content(f"Hello,\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 15 minutes.\n\nLuscent Glow Team")
+        
+        msg.add_alternative(f"""\
+        <html>
+          <body>
+            <h2 style="color:#d97743;">Password Reset Request</h2>
+            <p>Hello,</p>
+            <p>We received a request to reset your password. Use the following OTP to proceed:</p>
+            <h3 style="background:#f4f4f4; padding:10px; display:inline-block; letter-spacing:2px; border-radius:5px;">{otp}</h3>
+            <p>This OTP is valid for 15 minutes.</p>
+            <br/>
+            <p>Luscent Glow Team</p>
+          </body>
+        </html>
+        """, subtype='html')
+
+        try:
+            context = ssl.create_default_context()
+            server = smtplib.SMTP(smtp_server, int(smtp_port))
+            if int(smtp_port) == 587:
+                server.starttls(context=context)
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+            print(f"OTP email successfully sent to {req.email}")
+        except Exception as e:
+            print(f"Failed to send OTP email: {e}")
+            
     return {
-        "message": f"Reset OTP sent! Use verification code: {otp}",
-        "otp": otp
+        "message": "Reset OTP sent to your email address."
     }
 
 @app.post("/api/auth/reset-password")
@@ -291,7 +335,7 @@ async def reset_password(req: ResetPasswordRequest):
     if not saved_otp or saved_otp != req.otp:
         raise HTTPException(status_code=400, detail="Invalid verification OTP.")
     
-    if not expiry or expiry < datetime.now(timezone.utc):
+    if not expiry or expiry < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Verification OTP has expired. Please request a new one.")
     
     hashed_pwd = get_password_hash(req.new_password)
@@ -304,6 +348,22 @@ async def reset_password(req: ResetPasswordRequest):
     )
     
     return {"message": "Password reset successfully! You can now log in with your new password."}
+
+@app.post("/api/auth/change-password")
+async def change_password(req: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    user = await users_collection.find_one({"email": current_user["email"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not verify_password(req.current_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+        
+    hashed_pwd = get_password_hash(req.new_password)
+    await users_collection.update_one(
+        {"email": user["email"]},
+        {"$set": {"password": hashed_pwd}}
+    )
+    return {"message": "Password changed successfully"}
 
 
 # --- Products Routes ---
@@ -379,6 +439,27 @@ async def create_contact(contact_in: ContactCreate):
     result = await contacts_collection.insert_one(contact_dict)
     contact_dict["_id"] = result.inserted_id
     return contact_dict
+
+@app.get("/api/contacts", response_model=List[ContactResponse])
+async def get_all_contacts(current_user: dict = Depends(get_admin_user)):
+    contacts_cursor = contacts_collection.find().sort("created_at", -1)
+    contacts = []
+    async for doc in contacts_cursor:
+        contacts.append(doc)
+    return contacts
+
+@app.delete("/api/contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_contact(contact_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(contact_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid contact ID")
+    
+    result = await contacts_collection.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Contact inquiry not found")
+    return {"message": "Inquiry deleted successfully"}
 
 
 # --- Admin Routes ---
@@ -1282,6 +1363,291 @@ async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, cur
     
     return {"message": "Inventory adjusted successfully"}
 
+# --- Returns & Refunds Routes ---
+@app.post("/api/orders/{order_id}/return")
+async def request_return(order_id: str, request: ReturnRequest, current_user: dict = Depends(get_current_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order.get("user_id") != current_user.get("email") and order.get("email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="Not authorized to return this order")
+
+    if order.get("status") != "delivered":
+        raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
+
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {
+            "return_status": "requested",
+            "return_reason": request.return_reason
+        }}
+    )
+    return {"message": "Return requested successfully"}
+
+@app.post("/api/admin/orders/{order_id}/return/approve")
+async def approve_return(order_id: str, current_admin: dict = Depends(get_admin_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        await orders_collection.update_one(
+            {"_id": ObjectId(order_id)},
+            {"$set": {
+                "return_status": "approved",
+                "reverse_waybill": "MOCK_REVERSE_AWB_123"
+            }}
+        )
+        return {"message": "Return approved successfully (mock)", "reverse_waybill": "MOCK_REVERSE_AWB_123"}
+        
+    # Delhivery Reverse Pickup
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = "https://track.delhivery.com/api/cmu/create.json" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/cmu/create.json"
+    
+    payload = {
+        "format": "json",
+        "data": {
+            "pickup_location": {
+                "name": order.get("name", "Customer"),
+                "city": order.get("city", ""),
+                "pin": order.get("pincode", ""),
+                "country": "India",
+                "phone": order.get("phone", ""),
+                "add": order.get("address", "")
+            },
+            "shipments": [
+                {
+                    "name": order.get("name", "Customer"),
+                    "add": order.get("address", ""),
+                    "pin": order.get("pincode", ""),
+                    "city": order.get("city", ""),
+                    "state": order.get("state", ""),
+                    "country": "India",
+                    "phone": order.get("phone", ""),
+                    "order": f"RET-{order.get('order_number')}",
+                    "products_desc": "Return Items",
+                    "return_address": {
+                        "name": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
+                        "city": "Mumbai",
+                        "pin": "400001",
+                        "country": "India",
+                        "add": "Luscentglow Return Center"
+                    }
+                }
+            ]
+        }
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
+            if res.status_code == 200:
+                res_data = res.json()
+                waybill = res_data.get("packages", [{}])[0].get("waybill") if "packages" in res_data else "UNKNOWN_AWB"
+                await orders_collection.update_one(
+                    {"_id": ObjectId(order_id)},
+                    {"$set": {
+                        "return_status": "approved",
+                        "reverse_waybill": waybill
+                    }}
+                )
+                return {"message": "Return approved and reverse pickup scheduled", "response": res_data, "reverse_waybill": waybill}
+            else:
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to schedule reverse pickup: {str(e)}")
+
+@app.post("/api/admin/orders/{order_id}/return/refund")
+async def process_refund(order_id: str, current_admin: dict = Depends(get_admin_user)):
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+        
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {
+            "return_status": "refunded",
+            "refund_status": "refunded"
+        }}
+    )
+    return {"message": "Refund processed successfully"}
+
+# --- Newsletter Subscription Route ---
+class SubscribeRequest(BaseModel):
+    email: str
+
+@app.post("/api/subscribe")
+async def subscribe_newsletter(req: SubscribeRequest):
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("Warning: SMTP credentials not set in .env. Email not sent.")
+        return {"message": "Subscribed successfully (no email sent due to missing config)"}
+
+    msg = EmailMessage()
+    msg['Subject'] = "Welcome to the Luscent Glow Club!"
+    msg['From'] = f"Luscent Glow <{sender_email}>"
+    msg['To'] = req.email
+
+    msg.set_content("Hello!\n\nThank you for subscribing to the Luscent Glow Club. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.\n\nUse code GLOW10 for 10% off your first order.\nShop now: https://luscentglow.com/\n\nStay Radiant, Stay Protected,\nLuscent Glow Team")
+    
+    msg.add_alternative("""\
+    <html>
+      <body>
+        <h2 style="color:#d97743;">Welcome to the Luscent Glow Club!</h2>
+        <p>Hello!</p>
+        <p>Thank you for subscribing. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.</p>
+        <p>Use code <b>GLOW10</b> for 10% off your first order.</p>
+        <p>
+          <a href="https://luscentglow.com/" style="display:inline-block; padding:10px 20px; background-color:#d97743; color:#ffffff; font-weight:bold; text-decoration:none; border-radius:5px; font-size:14px; margin-top:10px;">
+            Shop Now
+          </a>
+        </p>
+        <br/>
+        <p>Stay Radiant, Stay Protected,<br/><b>Luscent Glow Team</b></p>
+      </body>
+    </html>
+    """, subtype='html')
+
+    try:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        if int(smtp_port) == 587:
+            server.starttls(context=context)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        print(f"Subscription email successfully sent to {req.email}")
+    except Exception as e:
+        print(f"Failed to send subscription email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+        
+    return {"message": "Subscribed successfully"}
+
+# --- Reviews Routes ---
+@app.post("/api/reviews", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)
+async def create_review(review_in: ReviewCreate, current_user: dict = Depends(get_current_user_optional)):
+    review_dict = review_in.dict()
+    review_dict["created_at"] = datetime.now(timezone.utc)
+    if current_user:
+        review_dict["user_id"] = str(current_user["_id"])
+    result = await reviews_collection.insert_one(review_dict)
+    
+    # Update average rating and reviews count on the product
+    # Note: We aggregate reviews to get the new average
+    cursor = reviews_collection.find({"product_id": review_in.product_id})
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    
+    if reviews:
+        avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+        await products_collection.update_one(
+            {"id": review_in.product_id},
+            {"$set": {"rating": avg_rating}}
+        )
+    
+    review_dict["_id"] = result.inserted_id
+    return review_dict
+
+@app.get("/api/reviews/product/{product_id}", response_model=List[ReviewResponse])
+async def get_product_reviews(product_id: str):
+    cursor = reviews_collection.find({"product_id": product_id}).sort("created_at", -1)
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    return reviews
+
+@app.get("/api/admin/reviews", response_model=List[ReviewResponse])
+async def get_all_reviews(current_user: dict = Depends(get_admin_user)):
+    cursor = reviews_collection.find().sort("created_at", -1)
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+    return reviews
+
+@app.put("/api/admin/reviews/{review_id}", response_model=ReviewResponse)
+async def update_review(review_id: str, review_in: ReviewUpdate, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(review_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid review ID")
+        
+    existing_review = await reviews_collection.find_one({"_id": obj_id})
+    if not existing_review:
+        raise HTTPException(status_code=404, detail="Review not found")
+        
+    update_data = {k: v for k, v in review_in.dict().items() if v is not None}
+    if update_data:
+        await reviews_collection.update_one({"_id": obj_id}, {"$set": update_data})
+        
+    updated_review = await reviews_collection.find_one({"_id": obj_id})
+    
+    # Recalculate average rating for target products
+    target_product_ids = set([existing_review.get("product_id"), updated_review.get("product_id")])
+    for pid in target_product_ids:
+        if pid:
+            cursor = reviews_collection.find({"product_id": pid})
+            reviews = [r async for r in cursor]
+            if reviews:
+                avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+                await products_collection.update_one(
+                    {"id": pid},
+                    {"$set": {"rating": round(avg_rating, 1)}}
+                )
+            else:
+                await products_collection.update_one(
+                    {"id": pid},
+                    {"$set": {"rating": 5.0}}
+                )
+                
+    return updated_review
+
+@app.delete("/api/admin/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_review(review_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(review_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid review ID")
+        
+    # Get the product_id before deleting so we can update the average rating
+    review = await reviews_collection.find_one({"_id": obj_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+        
+    await reviews_collection.delete_one({"_id": obj_id})
+    
+    # Update product average rating
+    product_id = review["product_id"]
+    cursor = reviews_collection.find({"product_id": product_id})
+    reviews = []
+    async for doc in cursor:
+        reviews.append(doc)
+        
+    if reviews:
+        avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+        await products_collection.update_one(
+            {"id": product_id},
+            {"$set": {"rating": avg_rating}}
+        )
+    else:
+        # No reviews left, set back to default or 0
+        await products_collection.update_one(
+            {"id": product_id},
+            {"$set": {"rating": 5.0}} # Default to 5.0
+        )
+        
+    return {"message": "Review deleted"}
 
 # --- Serve Frontend in Production ---
 if os.getenv("APP_ENV") == "production":

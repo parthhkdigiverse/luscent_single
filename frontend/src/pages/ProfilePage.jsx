@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
 import { 
   User, Package, MapPin, LogOut, ExternalLink, 
-  ShoppingBag, ShieldCheck, CheckCircle2, Plus, Edit2, Trash2, Check, X, Building, Home
+  ShoppingBag, ShieldCheck, CheckCircle2, Plus, Edit2, Trash2, Check, X, Building, Home, Star
 } from "lucide-react";
 
 export const ProfilePage = () => {
@@ -31,6 +32,14 @@ export const ProfilePage = () => {
   const [phone, setPhone] = useState(user?.phone || "+91 98765 43210");
   const [saveSuccess, setSaveSuccess] = useState("");
 
+  // Change Password State
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [currentPwd, setCurrentPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [pwdMsg, setPwdMsg] = useState("");
+  const [pwdError, setPwdError] = useState("");
+  const [pwdLoading, setPwdLoading] = useState(false);
+
   // Addresses State
   const [addresses, setAddresses] = useState([]);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -39,6 +48,7 @@ export const ProfilePage = () => {
 
   // Address Form State
   const [addrTag, setAddrTag] = useState("Home");
+  const [customTag, setCustomTag] = useState("");
   const [receiverName, setReceiverName] = useState("");
   const [addrPhone, setAddrPhone] = useState("");
   const [street, setStreet] = useState("");
@@ -46,6 +56,89 @@ export const ProfilePage = () => {
   const [stateName, setStateName] = useState("");
   const [pincode, setPincode] = useState("");
   const [isDefault, setIsDefault] = useState(false);
+
+  // Review State
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [reviewProductId, setReviewProductId] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewTitle, setReviewTitle] = useState("");
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [userReviews, setUserReviews] = useState({});
+
+  useEffect(() => {
+    const key = `luscent_user_reviews_${user?.email || "guest"}`;
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "{}");
+      setUserReviews(saved);
+    } catch (e) {}
+  }, [user]);
+
+  const handleOpenReviewModal = (productId) => {
+    setReviewProductId(productId);
+    const existing = userReviews[productId];
+    if (existing) {
+      setReviewRating(existing.rating || 5);
+      setReviewTitle(existing.title || "");
+      setReviewComment(existing.comment || "");
+    } else {
+      setReviewRating(5);
+      setReviewTitle("");
+      setReviewComment("");
+    }
+    setShowReviewModal(true);
+  };
+
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+    if (!reviewProductId) {
+      alert("Invalid product selection for review.");
+      return;
+    }
+    setSubmittingReview(true);
+    try {
+      const token = localStorage.getItem("luscent_token");
+      const res = await fetch(`${API_URL}/api/reviews`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token && { Authorization: `Bearer ${token}` })
+        },
+        body: JSON.stringify({
+          product_id: reviewProductId,
+          name: user?.name || "Customer",
+          rating: reviewRating,
+          title: reviewTitle,
+          comment: reviewComment
+        })
+      });
+      if (res.ok) {
+        setShowReviewModal(false);
+        const updated = {
+          ...userReviews,
+          [reviewProductId]: {
+            rating: reviewRating,
+            title: reviewTitle,
+            comment: reviewComment
+          }
+        };
+        setUserReviews(updated);
+        const key = `luscent_user_reviews_${user?.email || "guest"}`;
+        localStorage.setItem(key, JSON.stringify(updated));
+        setSaveSuccess("Review saved successfully!");
+        setTimeout(() => setSaveSuccess(""), 4000);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.detail?.[0]?.msg || errorData.detail || "Failed to submit review";
+        alert(`Failed to submit review: ${msg}`);
+      }
+    } catch (err) {
+      alert("Error submitting review");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -56,26 +149,7 @@ export const ProfilePage = () => {
       const storageKey = `luscent_addresses_${user.email}`;
       try {
         const saved = JSON.parse(localStorage.getItem(storageKey) || "[]");
-        if (saved.length === 0) {
-          // Default initial address
-          const initial = [
-            {
-              id: "addr_default_1",
-              tag: "Home",
-              receiverName: user.name || "Customer",
-              phone: "+91 98765 43210",
-              street: "123 Solar Glow Way, Marine Drive",
-              city: "Mumbai",
-              state: "Maharashtra",
-              pincode: "400002",
-              isDefault: true
-            }
-          ];
-          setAddresses(initial);
-          localStorage.setItem(storageKey, JSON.stringify(initial));
-        } else {
-          setAddresses(saved);
-        }
+        setAddresses(saved);
       } catch (e) {
         console.error("Error loading addresses:", e);
       }
@@ -196,7 +270,42 @@ export const ProfilePage = () => {
         setReviewMessage(errorData.detail || "Failed to submit review.");
       }
     } catch (err) {
-      setReviewMessage("Error submitting review.");
+      console.error(err);
+      setReturnMessage("Error submitting return request.");
+    }
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    setPwdMsg("");
+    setPwdError("");
+    if (newPwd.length < 6) {
+      setPwdError("New password must be at least 6 characters.");
+      return;
+    }
+    setPwdLoading(true);
+    try {
+      const token = localStorage.getItem("luscent_token");
+      const res = await fetch(`${API_URL}/api/auth/change-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ current_password: currentPwd, new_password: newPwd })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Failed to change password.");
+      
+      setCurrentPwd("");
+      setNewPwd("");
+      setShowPwdModal(false);
+      setSaveSuccess("Password changed successfully!");
+      setTimeout(() => setSaveSuccess(""), 4000);
+    } catch (err) {
+      setPwdError(err.message);
+    } finally {
+      setPwdLoading(false);
     }
   };
 
@@ -204,8 +313,9 @@ export const ProfilePage = () => {
   const handleOpenAddAddress = () => {
     setEditingAddress(null);
     setAddrTag("Home");
+    setCustomTag("");
     setReceiverName(user?.name || "");
-    setAddrPhone("+91 98765 43210");
+    setAddrPhone("");
     setStreet("");
     setCity("");
     setStateName("");
@@ -216,7 +326,13 @@ export const ProfilePage = () => {
 
   const handleOpenEditAddress = (addr) => {
     setEditingAddress(addr);
-    setAddrTag(addr.tag || "Home");
+    if (["Home", "Office"].includes(addr.tag)) {
+      setAddrTag(addr.tag);
+      setCustomTag("");
+    } else {
+      setAddrTag("Other");
+      setCustomTag(addr.tag || "");
+    }
     setReceiverName(addr.receiverName || user?.name || "");
     setAddrPhone(addr.phone || "");
     setStreet(addr.street || "");
@@ -251,9 +367,10 @@ export const ProfilePage = () => {
 
   const handleAddressSubmit = (e) => {
     e.preventDefault();
+    const finalTag = addrTag === "Other" && customTag.trim() ? customTag.trim() : addrTag;
     const newAddrObj = {
       id: editingAddress ? editingAddress.id : `addr_${Date.now()}`,
-      tag: addrTag,
+      tag: finalTag,
       receiverName: receiverName || user?.name || "Customer",
       phone: addrPhone,
       street,
@@ -275,6 +392,9 @@ export const ProfilePage = () => {
         ...a,
         isDefault: a.id === newAddrObj.id
       }));
+    } else if (newList.length > 0 && !newList.some((a) => a.isDefault)) {
+      // Ensure at least one default address exists
+      newList[0].isDefault = true;
     }
 
     saveAddressesToStorage(newList);
@@ -416,6 +536,22 @@ export const ProfilePage = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
+                            {order.items?.length > 0 && (() => {
+                              const pid = order.items[0].id || order.items[0].product_id;
+                              const existing = userReviews[pid];
+                              return (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenReviewModal(pid)}
+                                    className="text-xs font-semibold text-brand-dark hover:text-brand-accent flex items-center gap-1.5 transition cursor-pointer"
+                                  >
+                                    <Star size={13} className="text-amber-500 fill-amber-500" />
+                                    <span>{existing ? `Edit Review (${existing.rating}★)` : "Write Review"}</span>
+                                  </button>
+                                  <span className="text-brand-card/60">|</span>
+                                </>
+                              );
+                            })()}
                             <Link
                               to={`/track?query=${order.order_number}`}
                               className="text-xs font-semibold text-brand-accent hover:text-brand-dark flex items-center gap-1 transition"
@@ -440,8 +576,10 @@ export const ProfilePage = () => {
                                   <span className="text-[11px] text-brand-grey">Qty: {item.quantity} × ₹{item.price}</span>
                                 </div>
                               </div>
-                              <div className="flex flex-col items-end gap-2">
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex flex-col items-end gap-2">
                                 <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
+                              </div>
                                 {order.status === "delivered" && (
                                   <button onClick={() => openReviewModal(order, item)} className="text-[10px] bg-brand-dark/5 hover:bg-brand-dark/10 text-brand-dark font-semibold py-1 px-3 rounded-full transition border border-brand-card/60">
                                     Write Review
@@ -520,7 +658,22 @@ export const ProfilePage = () => {
                   />
                 </div>
 
-                <Button type="submit" className="py-3 px-6 text-xs uppercase tracking-wider bg-brand-dark text-white hover:bg-black font-semibold rounded-xl mt-4">
+                <div className="flex justify-between items-end">
+                  <div className="flex-1 mr-4">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">Password</label>
+                    <input
+                      type="password"
+                      value="********"
+                      disabled
+                      className="w-full p-3 bg-gray-100 border border-brand-card/40 rounded-xl text-xs text-gray-500 cursor-not-allowed max-w-[250px]"
+                    />
+                  </div>
+                  <Button type="button" onClick={() => setShowPwdModal(true)} variant="outline" className="text-xs py-3 px-4 border border-brand-dark/20">
+                    Change Password
+                  </Button>
+                </div>
+
+                <Button type="submit" className="py-3 px-6 text-xs uppercase tracking-wider bg-brand-dark text-white hover:bg-black font-semibold rounded-xl mt-6">
                   Save Profile Changes
                 </Button>
               </form>
@@ -663,6 +816,16 @@ export const ProfilePage = () => {
                     </button>
                   ))}
                 </div>
+                {addrTag === "Other" && (
+                  <input
+                    type="text"
+                    value={customTag}
+                    onChange={(e) => setCustomTag(e.target.value)}
+                    required
+                    placeholder="Enter custom label (e.g. Friend's House)"
+                    className="w-full mt-3 p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
+                  />
+                )}
               </div>
 
               <div>
@@ -821,6 +984,132 @@ export const ProfilePage = () => {
           </div>
         </div>
       )}
+
+      {/* ─── Change Password Modal ─── */}
+      {showPwdModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-[32px] border border-brand-card/40 shadow-2xl max-w-sm w-full p-6 space-y-6">
+            <div className="flex justify-between items-center border-b border-brand-card/30 pb-3">
+              <h3 className="font-serif text-lg font-semibold text-brand-dark">Change Password</h3>
+              <button onClick={() => { setShowPwdModal(false); setPwdError(""); setPwdMsg(""); }} className="text-brand-grey hover:text-brand-dark p-1 rounded-full">
+                <X size={18} />
+              </button>
+            </div>
+
+            {pwdError && (
+              <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-700 text-xs flex items-center gap-2">
+                <span>{pwdError}</span>
+              </div>
+            )}
+            {pwdMsg && (
+              <div className="p-3 bg-brand-green/10 border border-brand-green/20 rounded-xl text-brand-green text-xs font-semibold flex items-center gap-2">
+                <CheckCircle2 size={16} /> {pwdMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={currentPwd}
+                  onChange={(e) => setCurrentPwd(e.target.value)}
+                  required
+                  placeholder="••••••••"
+                  className="w-full p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-1">New Password</label>
+                <input
+                  type="password"
+                  value={newPwd}
+                  onChange={(e) => setNewPwd(e.target.value)}
+                  required
+                  minLength={6}
+                  placeholder="••••••••"
+                  className="w-full p-2.5 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3 border-t border-brand-card/30">
+                <Button type="button" onClick={() => { setShowPwdModal(false); setPwdError(""); setPwdMsg(""); }} variant="outline" className="py-2 px-4 border text-xs">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={pwdLoading} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
+                  {pwdLoading ? "Saving..." : "Update Password"}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Write Review Modal */}
+      <AnimatePresence>
+        {showReviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-6"
+            >
+              <h3 className="font-serif text-2xl font-semibold text-brand-dark">Write a Review</h3>
+              
+              <form onSubmit={handleReviewSubmit} className="space-y-4 text-sm">
+                <div>
+                  <label className="font-semibold block mb-1">Rating</label>
+                  <div className="flex gap-1 text-2xl cursor-pointer">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span 
+                        key={star} 
+                        onClick={() => setReviewRating(star)}
+                        className={star <= reviewRating ? "text-yellow-500" : "text-brand-card"}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={reviewTitle}
+                    onChange={(e) => setReviewTitle(e.target.value)}
+                    placeholder="Brief summary of your review"
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Comment</label>
+                  <textarea
+                    required
+                    rows="3"
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    placeholder="Tell us what you loved about it..."
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark resize-none"
+                  ></textarea>
+                </div>
+
+                <div className="pt-2 flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowReviewModal(false)}>Cancel</Button>
+                  <Button type="submit" variant="primary" disabled={submittingReview}>
+                    {submittingReview ? "Submitting..." : "Submit Review"}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
 
     </div>
   );

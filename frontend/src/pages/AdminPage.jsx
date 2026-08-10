@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
-  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw,
+  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare,
   LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star
 } from "lucide-react";
 import { API_URL } from "../config";
@@ -41,6 +41,8 @@ export const AdminPage = () => {
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [productsList, setProductsList] = useState([]);
   const [usersList, setUsersList] = useState([]);
+  const [reviewsList, setReviewsList] = useState([]);
+  const [inquiriesList, setInquiriesList] = useState([]);
   const [showDeletedUsers, setShowDeletedUsers] = useState(false);
   const [couponsList, setCouponsList] = useState([]);
 
@@ -109,6 +111,18 @@ export const AdminPage = () => {
   const [prodTheme, setProdTheme] = useState("brand-accent");
   const [prodCategory, setProdCategory] = useState("sunscreen");
   const [prodActives, setProdActives] = useState("");
+
+  // Review Admin Form Dialog State
+  const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
+  const [editingAdminReview, setEditingAdminReview] = useState(null);
+  const [adminReviewProductId, setAdminReviewProductId] = useState("sunscreen");
+  const [adminReviewName, setAdminReviewName] = useState("");
+  const [adminReviewRating, setAdminReviewRating] = useState(5);
+  const [adminReviewTitle, setAdminReviewTitle] = useState("");
+  const [adminReviewComment, setAdminReviewComment] = useState("");
+  const [submittingAdminReview, setSubmittingAdminReview] = useState(false);
+  const [reviewSearchQuery, setReviewSearchQuery] = useState("");
+  const [reviewRatingFilter, setReviewRatingFilter] = useState("all");
   const [prodBenefits, setProdBenefits] = useState("");
   const [prodHowToUse, setProdHowToUse] = useState("");
   const [prodIngredients, setProdIngredients] = useState("");
@@ -248,6 +262,20 @@ export const AdminPage = () => {
     }
   };
 
+  const handleDeleteInquiry = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this inquiry?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/contacts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setInquiriesList(inquiriesList.filter(inq => inq._id !== id));
+      } else {
+        alert("Failed to delete inquiry.");
+      }
+    } catch (err) {
+      alert("Error deleting inquiry.");
+    }
+  };
+
   const fetchDashboardData = async () => {
     setLoading(true);
     setError("");
@@ -349,13 +377,31 @@ export const AdminPage = () => {
       }
 
       // CMS Content Blocks
-      const contentRes = await fetch(`${API_URL}/api/content`);
+      const contentRes = await fetchAuth(`${API_URL}/api/admin/content`);
       if (contentRes.ok) {
         const contentData = await contentRes.json();
-        setContentBlocks(contentData || {});
+        const contentMap = {};
+        contentData.forEach(block => {
+          contentMap[block.key] = block.content;
+        });
+        setContentBlocks(contentMap);
+      }
+
+      // Inquiries
+      const contactsRes = await fetchAuth(`${API_URL}/api/contacts`);
+      if (contactsRes.ok) {
+        const contactsData = await contactsRes.json();
+        setInquiriesList(contactsData);
+      }
+      
+      // Reviews
+      const reviewsRes = await fetchAuth(`${API_URL}/api/admin/reviews`);
+      if (reviewsRes.ok) {
+        const reviewsData = await reviewsRes.json();
+        setReviewsList(reviewsData);
       }
     } catch (err) {
-      setError("Failed to communicate with FastAPI backend server. Ensure backend is running.");
+      setError("Failed to fetch dashboard data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -666,6 +712,82 @@ export const AdminPage = () => {
       }
     } catch (err) {
       alert("Error saving product");
+    }
+  };
+
+  const handleDeleteReview = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this review?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/reviews/${id}`, { method: "DELETE" });
+      if (res.ok) fetchDashboardData();
+    } catch (err) {
+      alert("Failed to delete review");
+    }
+  };
+
+  const handleOpenAddReviewModal = () => {
+    setEditingAdminReview(null);
+    setAdminReviewProductId(productsList[0]?.id || "sunscreen");
+    setAdminReviewName("");
+    setAdminReviewRating(5);
+    setAdminReviewTitle("");
+    setAdminReviewComment("");
+    setShowAdminReviewModal(true);
+  };
+
+  const handleOpenEditReviewModal = (review) => {
+    setEditingAdminReview(review);
+    setAdminReviewProductId(review.product_id || "sunscreen");
+    setAdminReviewName(review.name || "");
+    setAdminReviewRating(review.rating || 5);
+    setAdminReviewTitle(review.title || "");
+    setAdminReviewComment(review.comment || "");
+    setShowAdminReviewModal(true);
+  };
+
+  const handleSaveAdminReview = async (e) => {
+    e.preventDefault();
+    setSubmittingAdminReview(true);
+    const payload = {
+      product_id: adminReviewProductId,
+      name: adminReviewName,
+      rating: adminReviewRating,
+      title: adminReviewTitle,
+      comment: adminReviewComment
+    };
+
+    try {
+      let res;
+      if (editingAdminReview) {
+        const revId = editingAdminReview._id || editingAdminReview.id;
+        res = await fetchAuth(`${API_URL}/api/admin/reviews/${revId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetchAuth(`${API_URL}/api/reviews`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+      if (res.ok) {
+        setShowAdminReviewModal(false);
+        setEditingAdminReview(null);
+        fetchDashboardData();
+        setAdminReviewName("");
+        setAdminReviewRating(5);
+        setAdminReviewTitle("");
+        setAdminReviewComment("");
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.detail || "Failed to save review");
+      }
+    } catch (err) {
+      alert("Error saving review");
+    } finally {
+      setSubmittingAdminReview(false);
     }
   };
 
@@ -1789,6 +1911,128 @@ export const AdminPage = () => {
               </div>
             )}
 
+            {activeTab === "reviews" && (() => {
+              const filteredReviews = reviewsList.filter((rev) => {
+                const matchesSearch = (
+                  (rev.name || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+                  (rev.title || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+                  (rev.comment || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
+                  (rev.product_id || "").toLowerCase().includes(reviewSearchQuery.toLowerCase())
+                );
+                const matchesRating = reviewRatingFilter === "all" || rev.rating === parseInt(reviewRatingFilter);
+                return matchesSearch && matchesRating;
+              });
+
+              return (
+                <div className="space-y-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div>
+                      <h3 className="font-serif text-2xl font-semibold text-brand-dark">Product Reviews</h3>
+                      <p className="text-sm text-brand-grey">Manage, create, update and delete customer reviews across products.</p>
+                    </div>
+                    <Button 
+                      variant="primary" 
+                      className="flex items-center gap-2 bg-brand-dark text-white hover:bg-black py-2.5 px-5 rounded-xl text-xs font-semibold"
+                      onClick={handleOpenAddReviewModal}
+                    >
+                      <Plus size={16} /> Add Review
+                    </Button>
+                  </div>
+
+                  {/* Search and Filters Bar */}
+                  <div className="flex flex-col sm:flex-row items-center gap-3">
+                    <div className="relative flex-1 w-full">
+                      <input
+                        type="text"
+                        placeholder="Search by reviewer, title, comment or product ID..."
+                        value={reviewSearchQuery}
+                        onChange={(e) => setReviewSearchQuery(e.target.value)}
+                        className="w-full pl-4 pr-4 py-2 bg-brand-bg/50 border border-brand-card/40 rounded-xl text-xs focus:outline-none focus:border-brand-dark"
+                      />
+                    </div>
+                    <select
+                      value={reviewRatingFilter}
+                      onChange={(e) => setReviewRatingFilter(e.target.value)}
+                      className="w-full sm:w-44 px-3 py-2 bg-brand-bg/50 border border-brand-card/40 rounded-xl text-xs focus:outline-none focus:border-brand-dark cursor-pointer"
+                    >
+                      <option value="all">All Star Ratings</option>
+                      <option value="5">5 Stars</option>
+                      <option value="4">4 Stars</option>
+                      <option value="3">3 Stars</option>
+                      <option value="2">2 Stars</option>
+                      <option value="1">1 Star</option>
+                    </select>
+                  </div>
+
+                  <div className="bg-white rounded-3xl border border-brand-card/50 overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto custom-scrollbar">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead className="bg-brand-bg/50 border-b border-brand-card/50 text-brand-dark/70 uppercase text-[10px] font-bold tracking-wider">
+                          <tr>
+                            <th className="p-5 w-48">Date</th>
+                            <th className="p-5 w-32">Product ID</th>
+                            <th className="p-5 w-40">User</th>
+                            <th className="p-5 w-24">Rating</th>
+                            <th className="p-5">Title & Comment</th>
+                            <th className="p-5 w-24 text-center">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-brand-card/30">
+                          {filteredReviews.map((review) => (
+                            <tr key={review._id || review.id} className="hover:bg-brand-bg/30 transition">
+                              <td className="p-5 text-brand-grey whitespace-nowrap">
+                                {review.created_at ? new Date(review.created_at.endsWith("Z") ? review.created_at : review.created_at + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }) : "N/A"}
+                              </td>
+                              <td className="p-5 font-medium text-brand-dark">
+                                <span className="inline-block px-2.5 py-1 bg-brand-bg rounded-lg text-xs font-semibold border border-brand-card/30">
+                                  {review.product_id}
+                                </span>
+                              </td>
+                              <td className="p-5 text-brand-grey font-semibold">
+                                {review.name || "Anonymous"}
+                              </td>
+                              <td className="p-5 font-bold text-yellow-500">
+                                {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)} ({review.rating})
+                              </td>
+                              <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
+                                <strong className="text-brand-dark block text-xs mb-0.5">{review.title}</strong>
+                                <span className="text-xs">{review.comment}</span>
+                              </td>
+                              <td className="p-5 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <button
+                                    onClick={() => handleOpenEditReviewModal(review)}
+                                    className="p-2 text-brand-dark hover:bg-brand-bg border border-brand-card/40 rounded-xl transition shadow-sm"
+                                    title="Edit Review"
+                                  >
+                                    <Edit2 size={15} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteReview(review._id || review.id)}
+                                    className="p-2 text-red-500 hover:bg-red-50 border border-red-100 rounded-xl transition shadow-sm"
+                                    title="Delete Review"
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {filteredReviews.length === 0 && (
+                            <tr>
+                              <td colSpan="6" className="p-10 text-center text-brand-grey text-xs">
+                                No reviews found matching your search.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {activeTab === "reviews" && (
               <ReviewsTab API_URL={API_URL} fetchAuth={fetchAuth} />
             )}
@@ -1805,12 +2049,170 @@ export const AdminPage = () => {
                 fetchAuth={fetchAuth}
               />
             )}
+
+            {/* Inquiries Tab */}
+            {activeTab === "inquiries" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-brand-card/30">
+                  <div>
+                    <h2 className="font-serif text-2xl text-brand-dark">Contact Inquiries</h2>
+                    <p className="text-sm text-brand-grey mt-1">View messages submitted via the Contact Us form.</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-sm border border-brand-card/30 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-brand-bg/50 border-b border-brand-card/30 text-brand-grey font-semibold uppercase tracking-wider text-[10px]">
+                          <th className="p-5 w-48">Date</th>
+                          <th className="p-5 w-48">Name</th>
+                          <th className="p-5 w-48">Email</th>
+                          <th className="p-5">Message</th>
+                          <th className="p-5 w-24">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-card/20">
+                        {inquiriesList.map((inq) => (
+                          <tr key={inq._id} className="hover:bg-brand-bg/30 transition">
+                            <td className="p-5 text-brand-grey whitespace-nowrap">
+                              {new Date(inq.created_at.endsWith("Z") ? inq.created_at : inq.created_at + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                            </td>
+                            <td className="p-5 font-medium text-brand-dark">
+                              {inq.name}
+                            </td>
+                            <td className="p-5 text-brand-grey">
+                              {inq.email}
+                            </td>
+                            <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
+                              {inq.message}
+                            </td>
+                            <td className="p-5 text-right">
+                              <button
+                                onClick={() => handleDeleteInquiry(inq._id)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 transition"
+                                title="Delete Inquiry"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {inquiriesList.length === 0 && (
+                          <tr>
+                            <td colSpan="5" className="p-10 text-center text-brand-grey">
+                              No inquiries found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
 
-      {/* Edit/Add Product dialog modal */}
+      {/* Edit/Add Admin Review Dialog Modal */}
       <AnimatePresence>
+        {showAdminReviewModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] border border-brand-card/40 shadow-2xl max-w-md w-full flex flex-col"
+            >
+              <div className="flex justify-between items-center border-b border-brand-card/40 p-6 flex-shrink-0">
+                <h3 className="font-serif text-xl font-semibold text-brand-dark">
+                  {editingAdminReview ? "Edit Product Review" : "Add Product Review"}
+                </h3>
+                <button onClick={() => setShowAdminReviewModal(false)} className="text-brand-grey hover:text-brand-dark p-1 rounded-full hover:bg-brand-bg transition">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveAdminReview} className="p-6 space-y-4 text-sm">
+                <div>
+                  <label className="font-semibold block mb-1">Target Product</label>
+                  <select
+                    value={adminReviewProductId}
+                    onChange={(e) => setAdminReviewProductId(e.target.value)}
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs cursor-pointer font-medium"
+                  >
+                    {productsList.map(p => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                    ))}
+                    {productsList.length === 0 && (
+                      <>
+                        <option value="sunscreen">Solar Radiance Sunscreen (sunscreen)</option>
+                        <option value="face-wash">Luminous Cleanse Face Wash (face-wash)</option>
+                        <option value="serum">Hydra Glow Serum (serum)</option>
+                        <option value="combo">Complete Glow Set (combo)</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Reviewer Name</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminReviewName}
+                    onChange={(e) => setAdminReviewName(e.target.value)}
+                    placeholder="e.g. Ananya S."
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Rating (1 to 5 Stars)</label>
+                  <select
+                    value={adminReviewRating}
+                    onChange={(e) => setAdminReviewRating(parseInt(e.target.value))}
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs font-semibold cursor-pointer"
+                  >
+                    <option value="5">★★★★★ (5 - Excellent)</option>
+                    <option value="4">★★★★☆ (4 - Good)</option>
+                    <option value="3">★★★☆☆ (3 - Average)</option>
+                    <option value="2">★★☆☆☆ (2 - Poor)</option>
+                    <option value="1">★☆☆☆☆ (1 - Terrible)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Title</label>
+                  <input
+                    type="text"
+                    required
+                    value={adminReviewTitle}
+                    onChange={(e) => setAdminReviewTitle(e.target.value)}
+                    placeholder="e.g. Absolutely loved the glow!"
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Comment</label>
+                  <textarea
+                    required
+                    rows="3"
+                    value={adminReviewComment}
+                    onChange={(e) => setAdminReviewComment(e.target.value)}
+                    placeholder="Detailed feedback about the product experience..."
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark resize-none text-xs"
+                  ></textarea>
+                </div>
+                <div className="pt-2 flex justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setShowAdminReviewModal(false)} className="text-xs">Cancel</Button>
+                  <Button type="submit" variant="primary" disabled={submittingAdminReview} className="text-xs font-bold bg-brand-dark text-white hover:bg-black">
+                    {submittingAdminReview ? "Saving..." : (editingAdminReview ? "Update Review" : "Save Review")}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
         {showProductModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
             <motion.div
