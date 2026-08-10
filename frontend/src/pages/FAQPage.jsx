@@ -53,10 +53,11 @@ export const FAQPage = () => {
         </p>
 
         {/* Search bar */}
-        <div className="max-w-md mx-auto pt-4 relative">
-          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-grey/60">
-            <Search size={16} />
-          </span>
+        <div className="max-w-md mx-auto pt-4">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-grey/60">
+              <Search size={16} />
+            </span>
           <input
             type="text"
             value={searchTerm}
@@ -64,6 +65,7 @@ export const FAQPage = () => {
             placeholder="Search questions or ingredients..."
             className="w-full pl-11 pr-4 py-3 bg-white border border-brand-card rounded-full text-xs focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark transition-all"
           />
+          </div>
         </div>
       </section>
 

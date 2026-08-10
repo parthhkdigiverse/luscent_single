@@ -789,9 +789,6 @@ export const AdminPage = () => {
           <h1 className="font-serif text-3xl font-medium text-brand-dark mt-1">Admin Dashboard</h1>
         </div>
         <div className="flex gap-3">
-          <Button variant="outline" onClick={handleAdminLogout} className="text-xs py-2 px-4 border border-red-200 text-red-650 hover:bg-red-50 transition">
-            Logout
-          </Button>
           <Button variant="outline" onClick={fetchDashboardData} className="text-xs py-2 px-4 border border-brand-dark/20 hover:bg-brand-bg transition">
             Refresh Data
           </Button>

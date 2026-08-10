@@ -4,6 +4,10 @@ import random
 import httpx
 from datetime import datetime, timezone
 from typing import List, Optional
+import smtplib
+import ssl
+from email.message import EmailMessage
+from pydantic import BaseModel
 
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -17,7 +21,7 @@ from dotenv import load_dotenv
 
 from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, reviews_collection
 from schemas import (
-    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
+    UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
     ContactCreate, ContactResponse, CouponBase, CouponResponse,
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
@@ -266,16 +270,55 @@ async def forgot_password(req: ForgotPasswordRequest):
     # Generate 6-digit OTP
     otp = str(random.randint(100000, 999999))
     from datetime import timedelta
-    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    expiry = datetime.utcnow() + timedelta(minutes=15)
     
     await users_collection.update_one(
         {"email": req.email},
         {"$set": {"reset_otp": otp, "reset_otp_expiry": expiry}}
     )
     
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if all([smtp_server, smtp_user, smtp_pass]):
+        msg = EmailMessage()
+        msg['Subject'] = "Luscent Glow - Password Reset OTP"
+        msg['From'] = f"Luscent Glow <{sender_email}>"
+        msg['To'] = req.email
+
+        msg.set_content(f"Hello,\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 15 minutes.\n\nLuscent Glow Team")
+        
+        msg.add_alternative(f"""\
+        <html>
+          <body>
+            <h2 style="color:#d97743;">Password Reset Request</h2>
+            <p>Hello,</p>
+            <p>We received a request to reset your password. Use the following OTP to proceed:</p>
+            <h3 style="background:#f4f4f4; padding:10px; display:inline-block; letter-spacing:2px; border-radius:5px;">{otp}</h3>
+            <p>This OTP is valid for 15 minutes.</p>
+            <br/>
+            <p>Luscent Glow Team</p>
+          </body>
+        </html>
+        """, subtype='html')
+
+        try:
+            context = ssl.create_default_context()
+            server = smtplib.SMTP(smtp_server, int(smtp_port))
+            if int(smtp_port) == 587:
+                server.starttls(context=context)
+            server.login(smtp_user, smtp_pass)
+            server.send_message(msg)
+            server.quit()
+            print(f"OTP email successfully sent to {req.email}")
+        except Exception as e:
+            print(f"Failed to send OTP email: {e}")
+            
     return {
-        "message": f"Reset OTP sent! Use verification code: {otp}",
-        "otp": otp
+        "message": "Reset OTP sent to your email address."
     }
 
 @app.post("/api/auth/reset-password")
@@ -290,7 +333,7 @@ async def reset_password(req: ResetPasswordRequest):
     if not saved_otp or saved_otp != req.otp:
         raise HTTPException(status_code=400, detail="Invalid verification OTP.")
     
-    if not expiry or expiry < datetime.now(timezone.utc):
+    if not expiry or expiry < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Verification OTP has expired. Please request a new one.")
     
     hashed_pwd = get_password_hash(req.new_password)
@@ -303,6 +346,22 @@ async def reset_password(req: ResetPasswordRequest):
     )
     
     return {"message": "Password reset successfully! You can now log in with your new password."}
+
+@app.post("/api/auth/change-password")
+async def change_password(req: ChangePasswordRequest, current_user: dict = Depends(get_current_user)):
+    user = await users_collection.find_one({"email": current_user["email"]})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if not verify_password(req.current_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+        
+    hashed_pwd = get_password_hash(req.new_password)
+    await users_collection.update_one(
+        {"email": user["email"]},
+        {"$set": {"password": hashed_pwd}}
+    )
+    return {"message": "Password changed successfully"}
 
 
 # --- Products Routes ---
@@ -992,6 +1051,62 @@ async def track_order_public(identifier: str):
             } for item in order.get("items", [])
         ]
     }
+
+# --- Newsletter Subscription Route ---
+class SubscribeRequest(BaseModel):
+    email: str
+
+@app.post("/api/subscribe")
+async def subscribe_newsletter(req: SubscribeRequest):
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("Warning: SMTP credentials not set in .env. Email not sent.")
+        return {"message": "Subscribed successfully (no email sent due to missing config)"}
+
+    msg = EmailMessage()
+    msg['Subject'] = "Welcome to the Luscent Glow Club!"
+    msg['From'] = f"Luscent Glow <{sender_email}>"
+    msg['To'] = req.email
+
+    msg.set_content("Hello!\n\nThank you for subscribing to the Luscent Glow Club. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.\n\nUse code GLOW10 for 10% off your first order.\nShop now: https://luscentglow.com/\n\nStay Radiant, Stay Protected,\nLuscent Glow Team")
+    
+    msg.add_alternative("""\
+    <html>
+      <body>
+        <h2 style="color:#d97743;">Welcome to the Luscent Glow Club!</h2>
+        <p>Hello!</p>
+        <p>Thank you for subscribing. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.</p>
+        <p>Use code <b>GLOW10</b> for 10% off your first order.</p>
+        <p>
+          <a href="https://luscentglow.com/" style="display:inline-block; padding:10px 20px; background-color:#d97743; color:#ffffff; font-weight:bold; text-decoration:none; border-radius:5px; font-size:14px; margin-top:10px;">
+            Shop Now
+          </a>
+        </p>
+        <br/>
+        <p>Stay Radiant, Stay Protected,<br/><b>Luscent Glow Team</b></p>
+      </body>
+    </html>
+    """, subtype='html')
+
+    try:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        if int(smtp_port) == 587:
+            server.starttls(context=context)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        print(f"Subscription email successfully sent to {req.email}")
+    except Exception as e:
+        print(f"Failed to send subscription email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+        
+    return {"message": "Subscribed successfully"}
 
 # --- Reviews Routes ---
 @app.post("/api/reviews", response_model=ReviewResponse, status_code=status.HTTP_201_CREATED)

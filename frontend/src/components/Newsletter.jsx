@@ -6,11 +6,34 @@ export const Newsletter = () => {
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
 
-  const handleSubmit = (e) => {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (email) {
-      setSubscribed(true);
-      setEmail("");
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/subscribe`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ email }),
+        });
+        
+        if (response.ok) {
+          setSubscribed(true);
+          setEmail("");
+        } else {
+          setError("Subscription failed. Please try again later.");
+        }
+      } catch (err) {
+        setError("Network error. Please try again.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -34,18 +57,22 @@ export const Newsletter = () => {
             <p className="text-xs text-brand-grey">Thank you for subscribing. Use code GLOW10 for 10% off your first order.</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email address"
-              required
-              className="flex-grow px-5 py-3 rounded-full bg-white border border-brand-card focus:outline-none focus:border-brand-dark text-sm placeholder-brand-grey/70 transition-colors"
-            />
-            <Button type="submit" className="flex items-center justify-center gap-1.5 py-3 px-6">
-              Subscribe <Send size={14} />
-            </Button>
+          <form onSubmit={handleSubmit} className="flex flex-col gap-2 max-w-md mx-auto">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email address"
+                required
+                disabled={loading}
+                className="flex-grow px-5 py-3 rounded-full bg-white border border-brand-card focus:outline-none focus:border-brand-dark text-sm placeholder-brand-grey/70 transition-colors disabled:opacity-50"
+              />
+              <Button type="submit" disabled={loading} className="flex items-center justify-center gap-1.5 py-3 px-6">
+                {loading ? "Subscribing..." : "Subscribe"} {!loading && <Send size={14} />}
+              </Button>
+            </div>
+            {error && <p className="text-red-500 text-xs mt-1">{error}</p>}
           </form>
         )}
       </div>
