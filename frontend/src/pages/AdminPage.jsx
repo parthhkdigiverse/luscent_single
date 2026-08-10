@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
   TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw,
-  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight
+  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -378,34 +378,6 @@ export const AdminPage = () => {
     } catch (err) {
       alert("Error connecting to server");
     }
-  };
-
-  const handleApproveReturn = async (orderId) => {
-    if (!window.confirm("Approve this return and schedule Delhivery reverse pickup?")) return;
-    try {
-      const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/return/approve`, { method: "POST" });
-      if (res.ok) {
-        alert("Return approved & pickup scheduled!");
-        fetchDashboardData();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || "Error approving return");
-      }
-    } catch (err) { alert("Error connecting to server"); }
-  };
-
-  const handleProcessRefund = async (orderId) => {
-    if (!window.confirm("Process refund for this returned order?")) return;
-    try {
-      const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/return/refund`, { method: "POST" });
-      if (res.ok) {
-        alert("Refund processed successfully!");
-        fetchDashboardData();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.detail || "Error processing refund");
-      }
-    } catch (err) { alert("Error connecting to server"); }
   };
 
   const handleSoftDeleteOrder = async (orderId) => {
@@ -824,9 +796,9 @@ export const AdminPage = () => {
             <NavItem id="inventory" label="Inventory" icon={Boxes} />
             <NavItem id="users" label="Customers" icon={Users} />
             <NavItem id="coupons" label="Coupons" icon={Ticket} />
-            <NavItem id="returns" label="Returns & Refunds" icon={RotateCcw} />
             <NavItem id="payments" label="Payments" icon={CreditCard} />
             <NavItem id="reports" label="Reports" icon={BarChart3} />
+            <NavItem id="reviews" label="Reviews" icon={Star} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
             <NavItem id="content" label="Content" icon={FileText} />
           </div>
@@ -965,13 +937,11 @@ export const AdminPage = () => {
                     if ((o.status || '').toLowerCase() !== 'cancelled') return false;
                   } else if (orderTab === "Delivered") {
                     if ((o.status || '').toLowerCase() !== 'delivered') return false;
-                  } else if (orderTab === "Returned") {
-                    if ((o.status || '').toLowerCase() !== 'returned') return false;
                   }
                 }
                 return true;
               });
-              const pillTabs = ["All", "Today", "Paid", "COD", "Pending", "Cancelled", "Delivered", "Returned"];
+              const pillTabs = ["All", "Today", "Paid", "COD", "Pending", "Cancelled", "Delivered"];
               
               const getStatusColor = (status) => {
                 switch(status?.toLowerCase()) {
@@ -1386,84 +1356,6 @@ export const AdminPage = () => {
               <PaymentsTab orders={orders} />
             )}
 
-            {activeTab === "returns" && (() => {
-              const returnOrders = orders.filter(o => o.return_status);
-              return (
-              <div className="space-y-6 text-left">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
-                  <div>
-                    <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Returns & Refunds</h2>
-                    <p className="text-xs sm:text-sm text-brand-grey">Manage customer returns and process refunds</p>
-                  </div>
-                </div>
-                {returnOrders.length === 0 ? (
-                  <div className="py-12 text-center text-xs text-brand-grey border border-dashed border-brand-card/60 rounded-2xl bg-brand-bg/20">
-                    <RotateCcw size={32} className="mx-auto mb-3 text-brand-card/80" />
-                    No returns or refund requests found in this view.
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-xs text-left border-collapse">
-                      <thead>
-                        <tr className="border-b border-brand-card/40 text-brand-grey">
-                          <th className="py-3 px-4">Order / Customer</th>
-                          <th className="py-3 px-4">Return Reason</th>
-                          <th className="py-3 px-4">Amount</th>
-                          <th className="py-3 px-4">Status & Tracking</th>
-                          <th className="py-3 px-4 text-right">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {returnOrders.map(order => (
-                          <tr key={order.id || order._id} className="border-b border-brand-card/20 hover:bg-brand-bg/30 transition">
-                            <td className="py-4 px-4">
-                              <div className="font-semibold text-brand-dark">#{order.order_number}</div>
-                              <div className="text-[11px] text-brand-grey mt-0.5">{order.name}</div>
-                            </td>
-                            <td className="py-4 px-4 text-brand-dark max-w-[200px] truncate" title={order.return_reason}>
-                              {order.return_reason || "-"}
-                            </td>
-                            <td className="py-4 px-4 font-semibold text-brand-dark">
-                              ₹{(Number(order.totalPrice) || 0).toLocaleString("en-IN")}
-                            </td>
-                            <td className="py-4 px-4 space-y-1">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                                order.return_status === "requested" ? "bg-amber-50 text-amber-700 border border-amber-200" :
-                                order.return_status === "approved" ? "bg-blue-50 text-blue-700 border border-blue-200" :
-                                order.return_status === "refunded" ? "bg-brand-green/10 text-brand-green border border-brand-green/20" :
-                                "bg-brand-bg text-brand-grey"
-                              }`}>
-                                {order.return_status}
-                              </span>
-                              {order.reverse_waybill && (
-                                <div className="text-[10px] text-brand-grey mt-1 break-all">
-                                  AWB: {order.reverse_waybill}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-4 px-4">
-                              <div className="flex justify-end gap-2">
-                                {order.return_status === "requested" && (
-                                  <Button onClick={() => handleApproveReturn(order.id || order._id)} className="text-[10px] py-1.5 px-3 bg-brand-dark text-white hover:bg-black rounded-lg">
-                                    Approve & Pickup
-                                  </Button>
-                                )}
-                                {order.return_status === "approved" && (
-                                  <Button onClick={() => handleProcessRefund(order.id || order._id)} className="text-[10px] py-1.5 px-3 bg-brand-green text-white hover:bg-brand-green/80 rounded-lg shadow-sm border border-brand-green/30">
-                                    Issue Refund
-                                  </Button>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-              );
-            })()}
 
             {activeTab === "reports" && (
               <ReportsTab 
@@ -1895,6 +1787,10 @@ export const AdminPage = () => {
                   </div>
                 </form>
               </div>
+            )}
+
+            {activeTab === "reviews" && (
+              <ReviewsTab API_URL={API_URL} fetchAuth={fetchAuth} />
             )}
 
             {activeTab === "content" && (
@@ -2562,6 +2458,197 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   );
 };
 
+const ReviewsTab = ({ API_URL, fetchAuth }) => {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingReview, setEditingReview] = useState(null);
+  
+  const [formData, setFormData] = useState({
+    product_id: "",
+    user_name: "",
+    rating: 5,
+    comment: ""
+  });
+
+  const fetchReviews = async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/reviews`);
+      if (res.ok) {
+        const data = await res.json();
+        setReviews(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReviews();
+  }, []);
+
+  const handleOpenModal = (review = null) => {
+    if (review) {
+      setEditingReview(review);
+      setFormData({
+        product_id: review.product_id,
+        user_name: review.user_name,
+        rating: review.rating,
+        comment: review.comment
+      });
+    } else {
+      setEditingReview(null);
+      setFormData({
+        product_id: "",
+        user_name: "",
+        rating: 5,
+        comment: ""
+      });
+    }
+    setShowModal(true);
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    try {
+      const url = editingReview 
+        ? `${API_URL}/api/admin/reviews/${editingReview._id || editingReview.id}`
+        : `${API_URL}/api/admin/reviews`;
+      
+      const method = editingReview ? "PUT" : "POST";
+      
+      const res = await fetchAuth(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      
+      if (res.ok) {
+        fetchReviews();
+        setShowModal(false);
+      } else {
+        alert("Failed to save review");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error saving review");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this review?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/reviews/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchReviews();
+      } else {
+        alert("Failed to delete review");
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  if (loading) return <div className="text-center py-10 text-brand-grey text-sm">Loading reviews...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-brand-card/30 pb-4">
+        <div>
+          <h3 className="font-serif text-2xl font-bold text-brand-dark">Customer Reviews</h3>
+          <p className="text-xs text-brand-grey mt-1">Manage and moderate product reviews</p>
+        </div>
+        <Button onClick={() => handleOpenModal()} className="py-2 px-4 bg-brand-dark text-white rounded-xl text-xs font-semibold hover:bg-black flex items-center gap-2">
+          <Plus size={16} /> Add Review
+        </Button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-brand-card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-brand-bg/50 border-b border-brand-card">
+              <tr>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Customer</th>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Product ID</th>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Rating</th>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Comment</th>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Date</th>
+                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-card/50">
+              {reviews.map(review => (
+                <tr key={review._id || review.id} className="hover:bg-brand-bg/30 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="font-semibold text-brand-dark text-xs">{review.user_name}</div>
+                    <div className="text-[10px] text-brand-grey">{review.user_email}</div>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-semibold text-brand-dark">{review.product_id}</td>
+                  <td className="px-6 py-4">
+                    <div className="flex text-yellow-500">
+                      {[...Array(review.rating)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-[11px] text-brand-grey max-w-xs truncate">{review.comment}</td>
+                  <td className="px-6 py-4 text-[11px] text-brand-grey">{new Date(review.created_at).toLocaleDateString()}</td>
+                  <td className="px-6 py-4 text-right space-x-2">
+                    <button onClick={() => handleOpenModal(review)} className="text-brand-dark hover:text-brand-grey transition p-1">
+                      <Edit2 size={14} />
+                    </button>
+                    <button onClick={() => handleDelete(review._id || review.id)} className="text-red-500 hover:text-red-700 transition p-1">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {reviews.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-6 py-8 text-center text-brand-grey text-xs">No reviews found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/40 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-serif text-xl font-semibold text-brand-dark">{editingReview ? "Edit Review" : "Add Review"}</h3>
+              <button onClick={() => setShowModal(false)} className="text-brand-grey hover:text-brand-dark"><X size={20} /></button>
+            </div>
+            <form onSubmit={handleSave} className="space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Product ID</label>
+                <input required type="text" value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value})} disabled={!!editingReview} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Customer Name</label>
+                <input required type="text" value={formData.user_name} onChange={e => setFormData({...formData, user_name: e.target.value})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Rating (1-5)</label>
+                <input required type="number" min="1" max="5" value={formData.rating} onChange={e => setFormData({...formData, rating: parseInt(e.target.value)})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Comment</label>
+                <textarea required value={formData.comment} onChange={e => setFormData({...formData, comment: e.target.value})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark min-h-[100px]" />
+              </div>
+              <div className="pt-2 flex justify-end gap-3">
+                <Button type="button" onClick={() => setShowModal(false)} variant="outline" className="py-2 px-4 border text-xs">Cancel</Button>
+                <Button type="submit" className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">Save Review</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, setContentSaving, contentMessage, setContentMessage, API_URL, fetchAuth }) => {
   // ─── Local editing states ───
   // Hero Slides
@@ -3116,7 +3203,7 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-brand-card/30 pb-4">
         <div>
           <h3 className="font-serif text-2xl font-bold text-brand-dark">Inventory</h3>
-          <p className="text-xs text-brand-grey mt-1">Combo-aware stock tracking with damaged, returned and marketing pools.</p>
+          <p className="text-xs text-brand-grey mt-1">Combo-aware stock tracking with damaged and marketing pools.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={() => setShowHistoryModal(true)} variant="outline" className="py-2 px-4 rounded-xl text-xs font-semibold text-brand-dark border-brand-card/60 bg-white hover:bg-brand-bg flex items-center gap-2">
@@ -3142,7 +3229,7 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {productsList.map(prod => {
-          const inv = inventoryList.find(i => i.product_id === (prod.id || prod._id)) || { current: 0, available: 0, reserved: 0, marketing: 0, damaged: 0, returned: 0 };
+          const inv = inventoryList.find(i => i.product_id === (prod.id || prod._id)) || { current: 0, available: 0, reserved: 0, marketing: 0, damaged: 0 };
           const isCombo = prod.id === "combo";
           
           return (
@@ -3183,10 +3270,6 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
                 <div className="bg-red-50/50 border border-red-100 rounded-xl p-3">
                   <div className="text-[10px] font-bold text-red-700/70 uppercase tracking-wider mb-1">Damaged</div>
                   <div className="text-sm font-bold text-red-600 mt-1">{inv.damaged}</div>
-                </div>
-                <div className="bg-brand-bg/40 border border-brand-card/40 rounded-xl p-3">
-                  <div className="text-[10px] font-bold text-brand-grey uppercase tracking-wider mb-1">Returned</div>
-                  <div className="text-sm font-bold text-brand-dark mt-1">{inv.returned}</div>
                 </div>
               </div>
 
@@ -3235,7 +3318,6 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
                     <option value="reserved">Reserved (Orders)</option>
                     <option value="marketing">Marketing (PR)</option>
                     <option value="damaged">Damaged (Loss)</option>
-                    <option value="returned">Returned</option>
                   </select>
                 </div>
                 {adjustAction === "move" ? (
@@ -3246,7 +3328,6 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
                       <option value="reserved" disabled={adjustPool === "reserved"}>Reserved (Orders)</option>
                       <option value="marketing" disabled={adjustPool === "marketing"}>Marketing (PR)</option>
                       <option value="damaged" disabled={adjustPool === "damaged"}>Damaged (Loss)</option>
-                      <option value="returned" disabled={adjustPool === "returned"}>Returned</option>
                     </select>
                   </div>
                 ) : (
@@ -3469,9 +3550,6 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
   const pendingDispatchCount = orders.filter(o => o.status === "pending").length;
   const deliveredCount = orders.filter(o => o.status === "delivered").length;
   const cancelledCount = orders.filter(o => o.status === "cancelled").length;
-  const returnedCount = orders.filter(o => o.status === "returned").length;
-  const refundPendingCount = orders.filter(o => o.status === "cancelled" && o.paymentMethod === "prepaid").length;
-
   const inventoryValue = productsList.reduce((sum, p) => {
     const inv = inventoryList.find(i => i.product_id === (p.id || p._id));
     const available = inv ? inv.available : 0;
@@ -3531,8 +3609,6 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
         <StatCard title="Delivered" value={deliveredCount} icon={Package} trendStr="15%" isPositive={true} />
         <StatCard title="Cancelled" value={cancelledCount} icon={XCircle} trendStr="4%" isPositive={false} />
 
-        <StatCard title="Returned" value={returnedCount} icon={RotateCcw} hideTrend={true} />
-        <StatCard title="Refund Pending" value={refundPendingCount} icon={Wallet} hideTrend={true} />
         <StatCard title="Inventory Value" value={`₹${inventoryValue.toLocaleString('en-IN')}`} icon={Boxes} hideTrend={true} />
         <StatCard title="Products Sold Today" value={productsSoldToday} icon={Truck} trendStr="9%" isPositive={true} />
       </div>
@@ -3680,32 +3756,10 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
           o.cancelReason || "User Request"
         ]);
         break;
-      case "returned":
-        title = "Return Report";
-        headers = ["Order ID", "Date", "Customer", "Payment Method", "Amount", "Status"];
-        data = orders.filter(o => o.status === "returned").map(o => [
-          o.order_number || o._id,
-          new Date(o.created_at).toLocaleDateString(),
-          o.name,
-          o.paymentMethod,
-          o.totalPrice,
-          "Returned"
-        ]);
-        break;
-      case "refunds":
-        title = "Refund Report";
-        headers = ["Order ID", "Date", "Customer", "Payment Method", "Amount to Refund"];
-        data = orders.filter(o => o.status === "cancelled" && o.paymentMethod === "prepaid").map(o => [
-          o.order_number || o._id,
-          new Date(o.created_at).toLocaleDateString(),
-          o.name,
-          o.paymentMethod,
-          o.totalPrice
-        ]);
-        break;
+
       case "inventory":
         title = "Inventory Report";
-        headers = ["Product Name", "Available", "Reserved", "Marketing", "Damaged", "Returned", "Inventory Value"];
+        headers = ["Product Name", "Available", "Reserved", "Marketing", "Damaged", "Inventory Value"];
         data = productsList.map(p => {
           const inv = inventoryList.find(i => i.product_id === (p.id || p._id)) || {};
           return [
@@ -3714,7 +3768,6 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
             inv.reserved || 0,
             inv.marketing || 0,
             inv.damaged || 0,
-            inv.returned || 0,
             (inv.available || 0) * (p.price || 0)
           ];
         });
@@ -3778,8 +3831,6 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
         <ReportCard id="cod" title="COD Report" desc="COD collected, pending and RTO" icon={Wallet} />
         <ReportCard id="online" title="Online Payment Report" desc="Razorpay success rate & fees" icon={CreditCard} />
         <ReportCard id="cancelled" title="Cancelled Report" desc="Cancellations by reason & stage" icon={XCircle} />
-        <ReportCard id="returned" title="Return Report" desc="Returns, reasons and rate" icon={RotateCcw} />
-        <ReportCard id="refunds" title="Refund Report" desc="Refund velocity by channel" icon={Wallet} />
         <ReportCard id="inventory" title="Inventory Report" desc="Stock, aging and damaged inventory" icon={Boxes} />
       </div>
 

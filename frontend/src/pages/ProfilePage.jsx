@@ -16,11 +16,14 @@ export const ProfilePage = () => {
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
-  // Return Form State
-  const [returnModalOpen, setReturnModalOpen] = useState(false);
-  const [selectedReturnOrder, setSelectedReturnOrder] = useState(null);
-  const [returnReason, setReturnReason] = useState("");
-  const [returnMessage, setReturnMessage] = useState("");
+
+  // Review Form State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewOrder, setReviewOrder] = useState(null);
+  const [reviewProduct, setReviewProduct] = useState(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
 
   // Profile Details Form State
   const [name, setName] = useState(user?.name || "");
@@ -159,51 +162,41 @@ export const ProfilePage = () => {
     setTimeout(() => setSaveSuccess(""), 4000);
   };
 
-  const openReturnModal = (order) => {
-    setSelectedReturnOrder(order);
-    setReturnReason("");
-    setReturnMessage("");
-    setReturnModalOpen(true);
+
+
+  const openReviewModal = (order, item) => {
+    setReviewOrder(order);
+    setReviewProduct(item);
+    setRating(5);
+    setComment("");
+    setReviewMessage("");
+    setReviewModalOpen(true);
   };
 
-  const submitReturnRequest = async () => {
-    if (!returnReason.trim()) {
-      setReturnMessage("Please provide a reason for the return.");
-      return;
-    }
+  const submitReview = async () => {
     try {
       const token = localStorage.getItem("luscent_token");
-      const orderId = selectedReturnOrder._id || selectedReturnOrder.id;
-      if (!orderId) {
-        setReturnMessage("Order ID not found.");
-        return;
-      }
+      const orderId = reviewOrder._id || reviewOrder.id;
+      const productId = reviewProduct.id || reviewProduct.product_id || reviewProduct._id;
       
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/return`, {
+      const res = await fetch(`${API_URL}/api/products/${productId}/reviews?order_id=${orderId}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {})
         },
-        body: JSON.stringify({ return_reason: returnReason })
+        body: JSON.stringify({ rating, comment, order_id: orderId })
       });
       
       if (res.ok) {
-        // Update local state
-        setOrders(orders.map(o => {
-          if (o._id === orderId || o.id === orderId) {
-            return { ...o, return_status: "requested", return_reason: returnReason };
-          }
-          return o;
-        }));
-        setReturnModalOpen(false);
+        setReviewModalOpen(false);
+        alert("Review submitted successfully! Thank you.");
       } else {
         const errorData = await res.json();
-        setReturnMessage(errorData.detail || "Failed to request return.");
+        setReviewMessage(errorData.detail || "Failed to submit review.");
       }
     } catch (err) {
-      console.error(err);
-      setReturnMessage("Error submitting return request.");
+      setReviewMessage("Error submitting review.");
     }
   };
 
@@ -447,7 +440,14 @@ export const ProfilePage = () => {
                                   <span className="text-[11px] text-brand-grey">Qty: {item.quantity} × ₹{item.price}</span>
                                 </div>
                               </div>
-                              <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
+                              <div className="flex flex-col items-end gap-2">
+                                <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
+                                {order.status === "delivered" && (
+                                  <button onClick={() => openReviewModal(order, item)} className="text-[10px] bg-brand-dark/5 hover:bg-brand-dark/10 text-brand-dark font-semibold py-1 px-3 rounded-full transition border border-brand-card/60">
+                                    Write Review
+                                  </button>
+                                )}
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -456,17 +456,6 @@ export const ProfilePage = () => {
                         <div className="pt-3 border-t border-brand-card/40 flex justify-between items-center text-xs">
                           <span className="text-brand-grey flex flex-wrap items-center gap-2">
                             Payment: <strong className="text-brand-dark uppercase text-[11px]">{order.paymentMethod || "COD"}</strong>
-                            
-                            {order.status === "delivered" && !order.return_status && (
-                              <button onClick={() => openReturnModal(order)} className="text-amber-600 hover:text-amber-700 underline text-[11px] font-semibold ml-2">
-                                Request Return
-                              </button>
-                            )}
-                            {order.return_status && (
-                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ml-2 border border-amber-200/50">
-                                Return {order.return_status}
-                              </span>
-                            )}
                           </span>
                           <div>
                             <span className="text-brand-grey">Total: </span>
@@ -775,54 +764,64 @@ export const ProfilePage = () => {
         </div>
       )}
 
-      {/* Return Request Modal */}
-      {returnModalOpen && (
+
+      {/* Review Request Modal */}
+      {reviewModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-fadeIn">
             <button
-              onClick={() => setReturnModalOpen(false)}
+              onClick={() => setReviewModalOpen(false)}
               className="absolute top-5 right-5 text-brand-grey hover:text-brand-dark transition bg-brand-bg/50 rounded-full p-1.5"
             >
               <X size={18} />
             </button>
 
-            <h3 className="font-serif text-xl font-semibold text-brand-dark mb-1">Request Return</h3>
-            <p className="text-xs text-brand-grey mb-5">Order #{selectedReturnOrder?.order_number}</p>
+            <h3 className="font-serif text-xl font-semibold text-brand-dark mb-1">Write a Review</h3>
+            <p className="text-xs text-brand-grey mb-5">For {reviewProduct?.name}</p>
 
-            {returnMessage && (
+            {reviewMessage && (
               <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-semibold">
-                {returnMessage}
+                {reviewMessage}
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Reason for Return</label>
-                <select 
-                  value={returnReason}
-                  onChange={(e) => setReturnReason(e.target.value)}
-                  className="w-full p-3 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
-                >
-                  <option value="">Select a reason</option>
-                  <option value="Damaged product">Product was damaged or defective</option>
-                  <option value="Wrong item">Received wrong item</option>
-                  <option value="Not satisfied">Not satisfied with the product</option>
-                  <option value="Other">Other</option>
-                </select>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Rating</label>
+                <div className="flex gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star} onClick={() => setRating(star)} className="focus:outline-none">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill={star <= rating ? "#F59E0B" : "none"} stroke={star <= rating ? "#F59E0B" : "#D1D5DB"} strokeWidth="1.5">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Comment</label>
+                <textarea 
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="What did you like or dislike?"
+                  className="w-full p-3 bg-brand-bg/40 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition min-h-[100px] resize-none"
+                />
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-brand-card/30">
-                <Button type="button" onClick={() => setReturnModalOpen(false)} variant="outline" className="py-2 px-4 border text-xs">
+                <Button type="button" onClick={() => setReviewModalOpen(false)} variant="outline" className="py-2 px-4 border text-xs">
                   Cancel
                 </Button>
-                <Button onClick={submitReturnRequest} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
-                  Submit Request
+                <Button onClick={submitReview} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
+                  Submit Review
                 </Button>
               </div>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 };

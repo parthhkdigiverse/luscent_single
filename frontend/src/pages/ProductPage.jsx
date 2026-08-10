@@ -19,6 +19,7 @@ export const ProductPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
+  const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -31,6 +32,15 @@ export const ProductPage = () => {
         if (!resProduct.ok) throw new Error("Failed to fetch product");
         const data = await resProduct.json();
         setProduct(data);
+        
+        try {
+          const resReviews = await fetch(`${API_URL}/api/products/${data.id || data._id}/reviews`, { cache: 'no-store' });
+          if (resReviews.ok) {
+            setReviews(await resReviews.json());
+          }
+        } catch (e) {
+          console.error("Failed to fetch reviews");
+        }
         
         if (resAll.ok) {
           const allData = await resAll.json();
@@ -107,7 +117,7 @@ export const ProductPage = () => {
             <RatingStars rating={product.rating || 5} size={14} />
             <span className="text-xs font-semibold text-brand-dark">{product.rating || "5.0"}</span>
             <span className="text-xs text-brand-grey">
-              ({product.id === "combo" ? "12" : "48"} verified reviews)
+              ({reviews.length} customer {reviews.length === 1 ? 'review' : 'reviews'})
             </span>
           </div>
 
@@ -297,8 +307,40 @@ export const ProductPage = () => {
         </div>
       </section>
 
-      {/* You May Also Like (Cross Sell) */}
+      {/* Customer Reviews Section */}
       <section className="border-t border-brand-card/40 pt-16">
+        <h2 className="font-serif text-2xl md:text-3xl text-left font-medium text-brand-dark mb-8">
+          Customer Rituals & Reviews
+        </h2>
+        {reviews.length === 0 ? (
+          <div className="text-left text-sm text-brand-grey py-8 border border-dashed border-brand-card/60 rounded-2xl px-6 bg-brand-bg/30">
+            No reviews yet for this product. Check back soon!
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
+            {reviews.map((r) => (
+              <div key={r._id || r.id} className="bg-white border border-brand-card/50 rounded-2xl p-6 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-brand-dark">{r.user_name}</h4>
+                    <span className="text-[10px] text-brand-grey uppercase tracking-wider">{new Date(r.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <RatingStars rating={r.rating} size={14} />
+                  </div>
+                </div>
+                <p className="text-sm text-brand-dark leading-relaxed">"{r.comment}"</p>
+                <div className="mt-4 flex items-center gap-2 text-[10px] font-semibold text-brand-green bg-brand-green/10 w-max px-2 py-1 rounded-full uppercase tracking-widest">
+                  <CheckCircle2 size={12} /> Verified Purchase
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* You May Also Like (Cross Sell) */}
+      <section className="border-t border-brand-card/40 pt-16 mt-16">
         <h2 className="font-serif text-2xl md:text-3xl text-left font-medium text-brand-dark mb-8">
           Complete Your Ritual
         </h2>

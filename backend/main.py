@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
@@ -23,7 +23,7 @@ from schemas import (
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
     ProductCreate, ProductUpdate, OrderStatusUpdate,
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
-    ReturnRequest
+    ReviewCreate, ReviewResponse
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
 
@@ -592,10 +592,7 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                     await inventory_collection.update_one({"product_id": pid}, {"$inc": {"reserved": -item.get("quantity", 0), "available": item.get("quantity", 0)}})
                     await inventory_history_collection.insert_one({"product_id": pid, "action": "cancelled", "pool": "available", "amount": item.get("quantity", 0), "reason": f"Order {order.get('order_number')}", "order_id": order_id, "created_at": datetime.now(timezone.utc)})
                 
-                elif status_val == "returned":
-                    # Add to returned pool
-                    await inventory_collection.update_one({"product_id": pid}, {"$inc": {"returned": item.get("quantity", 0)}})
-                    await inventory_history_collection.insert_one({"product_id": pid, "action": "returned", "pool": "returned", "amount": item.get("quantity", 0), "reason": f"Order {order.get('order_number')}", "order_id": order_id, "created_at": datetime.now(timezone.utc)})
+
             
     return {"message": "Status updated successfully"}
 
@@ -1115,6 +1112,94 @@ async def cancel_delhivery_shipment(order_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel shipment: {str(e)}")
 
+# --- Reviews Routes ---
+@app.get("/api/products/{product_id}/reviews", response_model=List[ReviewResponse])
+async def get_product_reviews(product_id: str):
+    reviews = await reviews_collection.find({"product_id": product_id}).sort("created_at", -1).to_list(100)
+    return reviews
+
+@app.post("/api/products/{product_id}/reviews", response_model=ReviewResponse)
+async def create_product_review(product_id: str, review: ReviewCreate, order_id: str, current_user: dict = Depends(get_current_user)):
+    # Check if order belongs to user and is delivered
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("user_id") != current_user.get("email") and order.get("email") != current_user.get("email"):
+        raise HTTPException(status_code=403, detail="Not authorized to review this order")
+    if order.get("status") != "delivered":
+        raise HTTPException(status_code=400, detail="Only delivered items can be reviewed")
+        
+    # Check if user already reviewed this product
+    existing = await reviews_collection.find_one({"product_id": product_id, "user_email": current_user.get("email")})
+    if existing:
+        raise HTTPException(status_code=400, detail="You have already reviewed this product")
+        
+    new_review = {
+        "product_id": product_id,
+        "order_id": order_id,
+        "user_name": current_user.get("name") or order.get("name", "Customer"),
+        "user_email": current_user.get("email"),
+        "rating": review.rating,
+        "comment": review.comment,
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await reviews_collection.insert_one(new_review)
+    new_review["_id"] = result.inserted_id
+    
+    # Optional: recalculate product average rating
+    all_reviews = await reviews_collection.find({"product_id": product_id}).to_list(1000)
+    if all_reviews:
+        avg_rating = sum(r.get("rating", 5) for r in all_reviews) / len(all_reviews)
+        await products_collection.update_one(
+            {"$or": [{"_id": ObjectId(product_id) if ObjectId.is_valid(product_id) else "invalid"}, {"id": product_id}]},
+            {"$set": {"rating": round(avg_rating, 1)}}
+        )
+        
+    return new_review
+
+@app.get("/api/admin/reviews", response_model=List[ReviewResponse])
+async def get_all_reviews(current_admin: dict = Depends(get_admin_user)):
+    reviews = await reviews_collection.find({}).sort("created_at", -1).to_list(1000)
+    return reviews
+
+@app.post("/api/admin/reviews", response_model=ReviewResponse)
+async def admin_create_review(review: dict, current_admin: dict = Depends(get_admin_user)):
+    # Admin can add a manual review
+    new_review = {
+        "product_id": review.get("product_id"),
+        "order_id": review.get("order_id", "admin_added"),
+        "user_name": review.get("user_name", "Anonymous"),
+        "user_email": review.get("user_email", "admin@luscentglow.com"),
+        "rating": review.get("rating", 5),
+        "comment": review.get("comment", ""),
+        "created_at": datetime.now(timezone.utc)
+    }
+    result = await reviews_collection.insert_one(new_review)
+    new_review["_id"] = result.inserted_id
+    return new_review
+
+@app.put("/api/admin/reviews/{review_id}", response_model=ReviewResponse)
+async def admin_update_review(review_id: str, review: dict, current_admin: dict = Depends(get_admin_user)):
+    update_data = {}
+    if "rating" in review: update_data["rating"] = review["rating"]
+    if "comment" in review: update_data["comment"] = review["comment"]
+    if "user_name" in review: update_data["user_name"] = review["user_name"]
+    
+    if update_data:
+        await reviews_collection.update_one({"_id": ObjectId(review_id)}, {"$set": update_data})
+        
+    updated = await reviews_collection.find_one({"_id": ObjectId(review_id)})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return updated
+
+@app.delete("/api/admin/reviews/{review_id}")
+async def admin_delete_review(review_id: str, current_admin: dict = Depends(get_admin_user)):
+    result = await reviews_collection.delete_one({"_id": ObjectId(review_id)})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Review not found")
+    return {"message": "Review deleted successfully"}
+
 # --- Inventory Routes ---
 @app.get("/api/admin/inventory", response_model=List[InventoryResponse])
 async def get_inventory(current_admin: dict = Depends(get_admin_user)):
@@ -1136,14 +1221,14 @@ async def get_inventory_history(current_admin: dict = Depends(get_admin_user)):
 
 @app.post("/api/admin/inventory/{product_id}/adjust")
 async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, current_admin: dict = Depends(get_admin_user)):
-    valid_pools = ["available", "reserved", "marketing", "damaged", "returned"]
+    valid_pools = ["available", "reserved", "marketing", "damaged"]
     if adjustment.pool not in valid_pools:
         raise HTTPException(status_code=400, detail="Invalid inventory pool")
         
     doc = await inventory_collection.find_one({"product_id": product_id})
     if not doc:
         # Create default
-        doc = {"product_id": product_id, "available": 0, "reserved": 0, "marketing": 0, "damaged": 0, "returned": 0}
+        doc = {"product_id": product_id, "available": 0, "reserved": 0, "marketing": 0, "damaged": 0}
         await inventory_collection.insert_one(doc)
         
     if adjustment.target_pool:
@@ -1197,118 +1282,6 @@ async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, cur
     
     return {"message": "Inventory adjusted successfully"}
 
-# --- Returns & Refunds Routes ---
-@app.post("/api/orders/{order_id}/return")
-async def request_return(order_id: str, request: ReturnRequest, current_user: dict = Depends(get_current_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.get("user_id") != current_user.get("email") and order.get("email") != current_user.get("email"):
-        raise HTTPException(status_code=403, detail="Not authorized to return this order")
-
-    if order.get("status") != "delivered":
-        raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
-
-    await orders_collection.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": {
-            "return_status": "requested",
-            "return_reason": request.return_reason
-        }}
-    )
-    return {"message": "Return requested successfully"}
-
-@app.post("/api/admin/orders/{order_id}/return/approve")
-async def approve_return(order_id: str, current_admin: dict = Depends(get_admin_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    db_settings = await settings_collection.find_one({})
-    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
-    
-    if not delhivery_token or delhivery_token == "mock_token":
-        await orders_collection.update_one(
-            {"_id": ObjectId(order_id)},
-            {"$set": {
-                "return_status": "approved",
-                "reverse_waybill": "MOCK_REVERSE_AWB_123"
-            }}
-        )
-        return {"message": "Return approved successfully (mock)", "reverse_waybill": "MOCK_REVERSE_AWB_123"}
-        
-    # Delhivery Reverse Pickup
-    delhivery_env = db_settings.get("delhivery_env", "sandbox")
-    url = "https://track.delhivery.com/api/cmu/create.json" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/cmu/create.json"
-    
-    payload = {
-        "format": "json",
-        "data": {
-            "pickup_location": {
-                "name": order.get("name", "Customer"),
-                "city": order.get("city", ""),
-                "pin": order.get("pincode", ""),
-                "country": "India",
-                "phone": order.get("phone", ""),
-                "add": order.get("address", "")
-            },
-            "shipments": [
-                {
-                    "name": order.get("name", "Customer"),
-                    "add": order.get("address", ""),
-                    "pin": order.get("pincode", ""),
-                    "city": order.get("city", ""),
-                    "state": order.get("state", ""),
-                    "country": "India",
-                    "phone": order.get("phone", ""),
-                    "order": f"RET-{order.get('order_number')}",
-                    "products_desc": "Return Items",
-                    "return_address": {
-                        "name": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
-                        "city": "Mumbai",
-                        "pin": "400001",
-                        "country": "India",
-                        "add": "Luscentglow Return Center"
-                    }
-                }
-            ]
-        }
-    }
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
-            if res.status_code == 200:
-                res_data = res.json()
-                waybill = res_data.get("packages", [{}])[0].get("waybill") if "packages" in res_data else "UNKNOWN_AWB"
-                await orders_collection.update_one(
-                    {"_id": ObjectId(order_id)},
-                    {"$set": {
-                        "return_status": "approved",
-                        "reverse_waybill": waybill
-                    }}
-                )
-                return {"message": "Return approved and reverse pickup scheduled", "response": res_data, "reverse_waybill": waybill}
-            else:
-                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to schedule reverse pickup: {str(e)}")
-
-@app.post("/api/admin/orders/{order_id}/return/refund")
-async def process_refund(order_id: str, current_admin: dict = Depends(get_admin_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    await orders_collection.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": {
-            "return_status": "refunded",
-            "refund_status": "refunded"
-        }}
-    )
-    return {"message": "Refund processed successfully"}
 
 # --- Serve Frontend in Production ---
 if os.getenv("APP_ENV") == "production":

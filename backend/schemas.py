@@ -143,8 +143,29 @@ class OrderResponse(OrderCreate):
 class OrderStatusUpdate(BaseModel):
     status: str
 
-class ReturnRequest(BaseModel):
-    return_reason: str
+
+
+# Review Schemas
+class ReviewBase(BaseModel):
+    product_id: str
+    order_id: str
+    user_name: str
+    user_email: str
+    rating: int
+    comment: str
+
+class ReviewCreate(BaseModel):
+    rating: int
+    comment: str
+
+class ReviewResponse(ReviewBase):
+    db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    created_at: datetime
+    
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 # Contact Schemas
 class ContactCreate(BaseModel):
