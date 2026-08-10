@@ -85,7 +85,6 @@ export const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [imgCacheBust, setImgCacheBust] = useState(Date.now());
-  const [inquiriesList, setInquiriesList] = useState([]);
 
   // Product Form Dialog State
   const [showProductModal, setShowProductModal] = useState(false);
