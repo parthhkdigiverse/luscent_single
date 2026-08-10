@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
-  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw
+  TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -85,6 +85,7 @@ export const AdminPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [imgCacheBust, setImgCacheBust] = useState(Date.now());
+  const [inquiriesList, setInquiriesList] = useState([]);
 
   // Product Form Dialog State
   const [showProductModal, setShowProductModal] = useState(false);
@@ -170,6 +171,20 @@ export const AdminPage = () => {
     sessionStorage.removeItem("luscent_admin_token");
     setIsAuthenticated(false);
     window.location.reload();
+  };
+
+  const handleDeleteInquiry = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this inquiry?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/contacts/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setInquiriesList(inquiriesList.filter(inq => inq._id !== id));
+      } else {
+        alert("Failed to delete inquiry.");
+      }
+    } catch (err) {
+      alert("Error deleting inquiry.");
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -266,10 +281,21 @@ export const AdminPage = () => {
       }
 
       // CMS Content Blocks
-      const contentRes = await fetch(`${API_URL}/api/content`);
+      const contentRes = await fetchAuth(`${API_URL}/api/admin/content`);
       if (contentRes.ok) {
         const contentData = await contentRes.json();
-        setContentBlocks(contentData || {});
+        const contentMap = {};
+        contentData.forEach(block => {
+          contentMap[block.key] = block.content;
+        });
+        setContentBlocks(contentMap);
+      }
+
+      // Inquiries
+      const contactsRes = await fetchAuth(`${API_URL}/api/contacts`);
+      if (contactsRes.ok) {
+        const contactsData = await contactsRes.json();
+        setInquiriesList(contactsData);
       }
       
       // Reviews
@@ -279,7 +305,7 @@ export const AdminPage = () => {
         setReviewsList(reviewsData);
       }
     } catch (err) {
-      setError("Failed to communicate with FastAPI backend server. Ensure backend is running.");
+      setError("Failed to fetch dashboard data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -1523,6 +1549,68 @@ export const AdminPage = () => {
                 API_URL={API_URL}
                 fetchAuth={fetchAuth}
               />
+            )}
+
+            {/* Inquiries Tab */}
+            {activeTab === "inquiries" && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-brand-card/30">
+                  <div>
+                    <h2 className="font-serif text-2xl text-brand-dark">Contact Inquiries</h2>
+                    <p className="text-sm text-brand-grey mt-1">View messages submitted via the Contact Us form.</p>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-sm border border-brand-card/30 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-brand-bg/50 border-b border-brand-card/30 text-brand-grey font-semibold uppercase tracking-wider text-[10px]">
+                          <th className="p-5 w-48">Date</th>
+                          <th className="p-5 w-48">Name</th>
+                          <th className="p-5 w-48">Email</th>
+                          <th className="p-5">Message</th>
+                          <th className="p-5 w-24">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-card/20">
+                        {inquiriesList.map((inq) => (
+                          <tr key={inq._id} className="hover:bg-brand-bg/30 transition">
+                            <td className="p-5 text-brand-grey whitespace-nowrap">
+                              {new Date(inq.created_at.endsWith("Z") ? inq.created_at : inq.created_at + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                            </td>
+                            <td className="p-5 font-medium text-brand-dark">
+                              {inq.name}
+                            </td>
+                            <td className="p-5 text-brand-grey">
+                              {inq.email}
+                            </td>
+                            <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
+                              {inq.message}
+                            </td>
+                            <td className="p-5 text-right">
+                              <button
+                                onClick={() => handleDeleteInquiry(inq._id)}
+                                className="w-8 h-8 rounded-full flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 transition"
+                                title="Delete Inquiry"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {inquiriesList.length === 0 && (
+                          <tr>
+                            <td colSpan="5" className="p-10 text-center text-brand-grey">
+                              No inquiries found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </>

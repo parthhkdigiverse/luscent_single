@@ -356,6 +356,27 @@ async def create_contact(contact_in: ContactCreate):
     contact_dict["_id"] = result.inserted_id
     return contact_dict
 
+@app.get("/api/contacts", response_model=List[ContactResponse])
+async def get_all_contacts(current_user: dict = Depends(get_admin_user)):
+    contacts_cursor = contacts_collection.find().sort("created_at", -1)
+    contacts = []
+    async for doc in contacts_cursor:
+        contacts.append(doc)
+    return contacts
+
+@app.delete("/api/contacts/{contact_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_contact(contact_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(contact_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid contact ID")
+    
+    result = await contacts_collection.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Contact inquiry not found")
+    return {"message": "Inquiry deleted successfully"}
+
 
 # --- Admin Routes ---
 @app.get("/api/admin/stats")
