@@ -111,6 +111,7 @@ export const AdminPage = () => {
   const [prodTheme, setProdTheme] = useState("brand-accent");
   const [prodCategory, setProdCategory] = useState("sunscreen");
   const [prodActives, setProdActives] = useState("");
+  const [prodFaqs, setProdFaqs] = useState([]);
 
   // Review Admin Form Dialog State
   const [showAdminReviewModal, setShowAdminReviewModal] = useState(false);
@@ -128,6 +129,14 @@ export const AdminPage = () => {
   const [prodIngredients, setProdIngredients] = useState("");
   const [prodTags, setProdTags] = useState("");
   const [prodImages, setProdImages] = useState([]);
+
+  const addProdFAQ = () => setProdFaqs([...prodFaqs, { question: "", answer: "" }]);
+  const removeProdFAQ = (idx) => setProdFaqs(prodFaqs.filter((_, i) => i !== idx));
+  const updateProdFAQ = (idx, field, value) => {
+    const copy = [...prodFaqs];
+    copy[idx] = { ...copy[idx], [field]: value };
+    setProdFaqs(copy);
+  };
 
   // Manual Order Form Dialog State
   const [showManualOrderModal, setShowManualOrderModal] = useState(false);
@@ -489,6 +498,7 @@ export const AdminPage = () => {
     setProdActives(p.keyActives.join(", "));
     setProdBenefits(p.benefits.join(", "));
     setProdHowToUse(p.howToUse.join(", "));
+    setProdFaqs(p.faqs || []);
     setProdIngredients(p.ingredients);
     setProdTags(p.tags.join(", "));
     setProdImages(p.images || []);
@@ -510,6 +520,7 @@ export const AdminPage = () => {
     setProdActives("");
     setProdBenefits("");
     setProdHowToUse("");
+    setProdFaqs([]);
     setProdIngredients("");
     setProdTags("");
     setProdImages([]);
@@ -680,6 +691,7 @@ export const AdminPage = () => {
       benefits: prodBenefits.split(",").map(s => s.trim()).filter(Boolean),
       howToUse: prodHowToUse.split(",").map(s => s.trim()).filter(Boolean),
       ingredients: prodIngredients,
+      faqs: prodFaqs,
       tags: prodTags.split(",").map(s => s.trim()).filter(Boolean),
       images: prodImages.length > 0 ? prodImages : [
         `/images/${prodId}.png`,
@@ -903,10 +915,6 @@ export const AdminPage = () => {
                 e.target.style.display = 'none';
               }}
             />
-            <div>
-              <h2 className="font-serif font-semibold text-brand-dark text-sm leading-tight">Admin</h2>
-              <span className="text-[10px] text-brand-grey uppercase tracking-wider font-bold">Super Admin</span>
-            </div>
           </div>
         </div>
         
@@ -921,6 +929,7 @@ export const AdminPage = () => {
             <NavItem id="payments" label="Payments" icon={CreditCard} />
             <NavItem id="reports" label="Reports" icon={BarChart3} />
             <NavItem id="reviews" label="Reviews" icon={Star} />
+            <NavItem id="inquiries" label="Inquiries" icon={MessageSquare} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
             <NavItem id="content" label="Content" icon={FileText} />
           </div>
@@ -2052,11 +2061,11 @@ export const AdminPage = () => {
 
             {/* Inquiries Tab */}
             {activeTab === "inquiries" && (
-              <div className="space-y-6">
-                <div className="flex justify-between items-center bg-white p-6 rounded-3xl shadow-sm border border-brand-card/30">
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                   <div>
-                    <h2 className="font-serif text-2xl text-brand-dark">Contact Inquiries</h2>
-                    <p className="text-sm text-brand-grey mt-1">View messages submitted via the Contact Us form.</p>
+                    <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Contact Inquiries</h2>
+                    <p className="text-xs sm:text-sm text-brand-grey">{inquiriesList.length} inquiries • View messages submitted via the Contact Us form</p>
                   </div>
                 </div>
 
@@ -2412,6 +2421,71 @@ export const AdminPage = () => {
                     required
                     className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark focus:bg-white"
                   />
+                </div>
+
+                {/* Product FAQs */}
+                <div className="md:col-span-2 mt-4 mb-2">
+                  <div className="flex justify-between items-center mb-3">
+                    <div>
+                      <label className="font-semibold block">Product FAQs</label>
+                      <p className="text-xs text-brand-grey">Add frequently asked questions for this specific product.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addProdFAQ}
+                      className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1 bg-brand-accent/10 hover:bg-brand-accent/20 px-3 py-1.5 rounded-lg"
+                    >
+                      <Plus size={12} /> Add FAQ
+                    </button>
+                  </div>
+                  {prodFaqs.length === 0 ? (
+                    <div className="p-6 bg-brand-bg/50 border border-brand-card border-dashed rounded-xl text-center">
+                      <p className="text-sm text-brand-dark/60 font-medium">No FAQs added yet.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {prodFaqs.map((faq, idx) => (
+                        <div key={idx} className="p-4 bg-white border border-brand-card rounded-xl shadow-sm space-y-3 relative group transition-all hover:border-brand-dark/30">
+                          <div className="flex justify-between items-center border-b border-brand-card/30 pb-2">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-grey flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-brand-bg flex items-center justify-center text-brand-dark">{idx + 1}</span>
+                              FAQ Entry
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeProdFAQ(idx)}
+                              className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1.5 rounded-lg transition opacity-50 group-hover:opacity-100"
+                              title="Remove FAQ"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-1 gap-3 pt-1">
+                            <div>
+                              <label className="text-[11px] font-bold uppercase text-brand-grey/80 block mb-1.5">Question</label>
+                              <input
+                                type="text"
+                                placeholder="e.g. Is this suitable for all skin types?"
+                                value={faq.question}
+                                onChange={(e) => updateProdFAQ(idx, "question", e.target.value)}
+                                className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-lg text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-bold uppercase text-brand-grey/80 block mb-1.5">Answer</label>
+                              <textarea
+                                placeholder="e.g. Yes, it is dermatologically tested and suitable for sensitive skin."
+                                value={faq.answer}
+                                onChange={(e) => updateProdFAQ(idx, "answer", e.target.value)}
+                                rows={2}
+                                className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-lg text-sm focus:outline-none focus:border-brand-dark focus:bg-white resize-none transition"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 </div>
@@ -3060,8 +3134,9 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     { tag: "THE COMPLETE GLOW ROUTINE", title: "Ultimate Skin Defense Duo.", desc: "Maximum sun protection combined with a deep brightening cleanse. Save ₹86.", image: "/images/hero_banner.png", link: "/product/combo" }
   ];
 
-  // Homepage Banner
+  // Homepage Banner & Announcement
   const homepageBanner = contentBlocks.homepage_banner || { title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results." };
+  const announcementBar = contentBlocks.announcement_bar || { text: "GOLD JEWELLERY 💰 \u2022 VISIT SHOWROOM TODAY \u2022 LIMITED TIME OFFER! GET 2% MAKING CHARGES ON GOLD JEWELLERY - SHOP NOW \u2022 TRUSTED JEWELLERY IN NADIAD ✨ \u2022" };
 
   // Testimonials
   const testimonials = contentBlocks.testimonials || [
@@ -3127,6 +3202,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   // ─── Local form states ───
   const [localHero, setLocalHero] = useState(heroSlides);
   const [localBanner, setLocalBanner] = useState(homepageBanner);
+  const [localAnnouncement, setLocalAnnouncement] = useState(announcementBar);
   const [localTestimonials, setLocalTestimonials] = useState(testimonials);
   const [localFAQ, setLocalFAQ] = useState(faqCategories);
   const [localStory, setLocalStory] = useState(ourStory);
@@ -3151,6 +3227,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   React.useEffect(() => {
     if (contentBlocks.hero_slides) setLocalHero(contentBlocks.hero_slides);
     if (contentBlocks.homepage_banner) setLocalBanner(contentBlocks.homepage_banner);
+    if (contentBlocks.announcement_bar) setLocalAnnouncement(contentBlocks.announcement_bar);
     if (contentBlocks.testimonials) setLocalTestimonials(contentBlocks.testimonials);
     if (contentBlocks.faq_categories) setLocalFAQ(contentBlocks.faq_categories);
     if (contentBlocks.our_story) setLocalStory(contentBlocks.our_story);
@@ -3292,6 +3369,19 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
           <Button onClick={() => saveSection("homepage_banner", localBanner)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
             {contentSaving ? "Saving..." : "Save Banner"}
           </Button>
+        </div>
+
+        <div className="mt-10 border-t border-brand-card/30 pt-8">
+          <h4 className={sectionTitleClass}>Top Announcement Bar (Marquee)</h4>
+          <div>
+            <label className={labelClass}>Scrolling Text</label>
+            <textarea rows={2} value={localAnnouncement.text} onChange={(e) => setLocalAnnouncement({ text: e.target.value })} className={inputClass + " resize-none"} />
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => saveSection("announcement_bar", localAnnouncement)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
+              {contentSaving ? "Saving..." : "Save Announcement"}
+            </Button>
+          </div>
         </div>
       </div>
       )}
@@ -3624,7 +3714,7 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
         <div>
           <h4 className="text-sm font-bold text-brand-dark">Combo logic</h4>
           <p className="text-xs text-brand-grey mt-1 leading-relaxed">
-            Selling <span className="font-bold text-brand-dark">1 Combo</span> deducts <span className="font-bold text-brand-dark">1 Facewash</span> and <span className="font-bold text-brand-dark">1 Sunscreen</span> automatically. Cancellations before dispatch restore both. Returns prompt a Reusable / Damaged check.
+            Selling <span className="font-bold text-brand-dark">1 Combo</span> deducts <span className="font-bold text-brand-dark">1 Facewash</span> and <span className="font-bold text-brand-dark">1 Sunscreen</span> automatically. Cancellations before dispatch restore both.
           </p>
         </div>
       </div>

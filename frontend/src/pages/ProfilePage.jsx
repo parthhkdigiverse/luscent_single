@@ -63,7 +63,7 @@ export const ProfilePage = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewTitle, setReviewTitle] = useState("");
   const [reviewComment, setReviewComment] = useState("");
-  const [reviewMessage, setReviewMessage] = useState("");
+  const [reviewImages, setReviewImages] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [userReviews, setUserReviews] = useState({});
 
@@ -82,10 +82,12 @@ export const ProfilePage = () => {
       setReviewRating(existing.rating || 5);
       setReviewTitle(existing.title || "");
       setReviewComment(existing.comment || "");
+      setReviewImages(existing.images || []);
     } else {
       setReviewRating(5);
       setReviewTitle("");
       setReviewComment("");
+      setReviewImages([]);
     }
     setShowReviewModal(true);
   };
@@ -110,7 +112,8 @@ export const ProfilePage = () => {
           name: user?.name || "Customer",
           rating: reviewRating,
           title: reviewTitle,
-          comment: reviewComment
+          comment: reviewComment,
+          images: reviewImages
         })
       });
       if (res.ok) {
@@ -120,7 +123,8 @@ export const ProfilePage = () => {
           [reviewProductId]: {
             rating: reviewRating,
             title: reviewTitle,
-            comment: reviewComment
+            comment: reviewComment,
+            images: reviewImages
           }
         };
         setUserReviews(updated);
@@ -236,44 +240,6 @@ export const ProfilePage = () => {
     setTimeout(() => setSaveSuccess(""), 4000);
   };
 
-
-
-  const openReviewModal = (order, item) => {
-    setReviewOrder(order);
-    setReviewProduct(item);
-    setRating(5);
-    setComment("");
-    setReviewMessage("");
-    setReviewModalOpen(true);
-  };
-
-  const submitReview = async () => {
-    try {
-      const token = localStorage.getItem("luscent_token");
-      const orderId = reviewOrder._id || reviewOrder.id;
-      const productId = reviewProduct.id || reviewProduct.product_id || reviewProduct._id;
-      
-      const res = await fetch(`${API_URL}/api/products/${productId}/reviews?order_id=${orderId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ rating, comment, order_id: orderId })
-      });
-      
-      if (res.ok) {
-        setReviewModalOpen(false);
-        alert("Review submitted successfully! Thank you.");
-      } else {
-        const errorData = await res.json();
-        setReviewMessage(errorData.detail || "Failed to submit review.");
-      }
-    } catch (err) {
-      console.error(err);
-      setReturnMessage("Error submitting return request.");
-    }
-  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -577,14 +543,7 @@ export const ProfilePage = () => {
                                 </div>
                               </div>
                               <div className="flex flex-col items-end gap-1">
-                                <div className="flex flex-col items-end gap-2">
                                 <span className="text-xs font-semibold text-brand-dark">₹{item.price * item.quantity}</span>
-                              </div>
-                                {order.status === "delivered" && (
-                                  <button onClick={() => openReviewModal(order, item)} className="text-[10px] bg-brand-dark/5 hover:bg-brand-dark/10 text-brand-dark font-semibold py-1 px-3 rounded-full transition border border-brand-card/60">
-                                    Write Review
-                                  </button>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -1096,6 +1055,52 @@ export const ProfilePage = () => {
                     placeholder="Tell us what you loved about it..."
                     className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark resize-none"
                   ></textarea>
+                </div>
+
+                <div>
+                  <label className="font-semibold block mb-1">Images (Optional, up to 3)</label>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {reviewImages.map((imgStr, idx) => (
+                      <div key={idx} className="relative w-16 h-16 rounded-xl border border-brand-card/50 overflow-hidden group">
+                        <img src={imgStr} alt="Review" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setReviewImages(reviewImages.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {reviewImages.length < 3 && (
+                      <label className="w-16 h-16 rounded-xl border-2 border-dashed border-brand-card flex flex-col items-center justify-center text-brand-grey hover:bg-brand-bg/50 cursor-pointer transition">
+                        <Plus size={16} />
+                        <span className="text-[10px] font-bold mt-1">Add</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files);
+                            const allowed = 3 - reviewImages.length;
+                            const toProcess = files.slice(0, allowed);
+                            toProcess.forEach(file => {
+                              if (file.size > 2 * 1024 * 1024) {
+                                alert("Each image must be less than 2MB.");
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setReviewImages(prev => [...prev, reader.result]);
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
                 </div>
 
                 <div className="pt-2 flex justify-end gap-3">

@@ -75,6 +75,7 @@ class ProductBase(BaseModel):
     caution: Optional[List[str]] = None
     tags: List[str]
     images: List[str]
+    faqs: Optional[List[dict]] = []
 
 class ProductResponse(ProductBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -104,6 +105,7 @@ class ProductUpdate(BaseModel):
     caution: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     images: Optional[List[str]] = None
+    faqs: Optional[List[dict]] = None
 
 # Order Schemas
 class OrderItem(BaseModel):
@@ -135,10 +137,7 @@ class OrderResponse(OrderCreate):
     is_deleted: bool = False
     tracking_number: Optional[str] = None
     carrier: Optional[str] = None
-    return_status: Optional[str] = None
-    return_reason: Optional[str] = None
-    reverse_waybill: Optional[str] = None
-    refund_status: Optional[str] = None
+
 
     class Config:
         populate_by_name = True
@@ -152,15 +151,22 @@ class OrderStatusUpdate(BaseModel):
 # Review Schemas
 class ReviewBase(BaseModel):
     product_id: str
-    order_id: str
-    user_name: str
-    user_email: str
+    order_id: Optional[str] = "direct"
+    user_name: Optional[str] = "Customer"
+    name: Optional[str] = "Customer"
+    user_email: Optional[str] = ""
+    title: Optional[str] = ""
     rating: int
     comment: str
+    images: Optional[List[str]] = []
 
 class ReviewCreate(BaseModel):
+    product_id: str
+    name: Optional[str] = "Customer"
+    title: Optional[str] = ""
     rating: int
     comment: str
+    images: Optional[List[str]] = []
 
 class ReviewResponse(ReviewBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)

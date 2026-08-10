@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart, CheckCircle2 } from "lucide-react";
 import { Button } from "../components/Button";
 import { RatingStars } from "../components/RatingStars";
 import { ProductGallery } from "../components/ProductGallery";
 import { BenefitBadge } from "../components/BenefitBadge";
 import { HowToUseSteps } from "../components/HowToUseSteps";
 import { IngredientAccordion } from "../components/IngredientAccordion";
+import { FAQAccordion } from "../components/FAQAccordion";
 import { useCart } from "../context/CartContext";
 import { API_URL } from "../config";
 
@@ -19,7 +20,6 @@ export const ProductPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
-  const [reviews, setReviews] = useState([]);
   const [reviews, setReviews] = useState([]);
 
   useEffect(() => {
@@ -260,7 +260,7 @@ export const ProductPage = () => {
       {/* Accordion / Tabs Details */}
       <section className="border-t border-brand-card/40 pt-12 text-left">
         <div className="flex border-b border-brand-card/40 mb-6 gap-6 overflow-x-auto pb-1">
-          {["description", "benefits", "how-to-use", "ingredients", "caution"].map((tab) => {
+          {["description", "benefits", "how-to-use", "ingredients", "faq", "caution"].map((tab) => {
             if (tab === "caution" && !product.caution) return null;
             return (
               <button
@@ -310,6 +310,18 @@ export const ProductPage = () => {
           {activeTab === "ingredients" && (
             <div className="max-w-2xl">
               <IngredientAccordion actives={product.keyActives} fullList={product.ingredients} />
+            </div>
+          )}
+
+          {activeTab === "faq" && (
+            <div className="max-w-2xl">
+              {product.faqs && product.faqs.length > 0 ? (
+                <FAQAccordion items={product.faqs} />
+              ) : (
+                <div className="text-left text-sm text-brand-grey py-8 border border-dashed border-brand-card/60 rounded-2xl px-6 bg-brand-bg/30">
+                  No FAQs available for this product yet. Check back later!
+                </div>
+              )}
             </div>
           )}
 
@@ -372,38 +384,15 @@ export const ProductPage = () => {
                     <strong className="text-brand-dark text-xs block truncate">{rev.title}</strong>
                   )}
                   <p className="text-brand-grey text-[11px] leading-tight line-clamp-2 mt-0.5">{rev.comment}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* You May Also Like (Cross Sell) */}
-      <section className="border-t border-brand-card/40 pt-16">
-        <h2 className="font-serif text-2xl md:text-3xl text-left font-medium text-brand-dark mb-8">
-          Customer Rituals & Reviews
-        </h2>
-        {reviews.length === 0 ? (
-          <div className="text-left text-sm text-brand-grey py-8 border border-dashed border-brand-card/60 rounded-2xl px-6 bg-brand-bg/30">
-            No reviews yet for this product. Check back soon!
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left">
-            {reviews.map((r) => (
-              <div key={r._id || r.id} className="bg-white border border-brand-card/50 rounded-2xl p-6 hover:shadow-md transition-shadow">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h4 className="text-sm font-semibold text-brand-dark">{r.user_name}</h4>
-                    <span className="text-[10px] text-brand-grey uppercase tracking-wider">{new Date(r.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <RatingStars rating={r.rating} size={14} />
-                  </div>
-                </div>
-                <p className="text-sm text-brand-dark leading-relaxed">"{r.comment}"</p>
-                <div className="mt-4 flex items-center gap-2 text-[10px] font-semibold text-brand-green bg-brand-green/10 w-max px-2 py-1 rounded-full uppercase tracking-widest">
-                  <CheckCircle2 size={12} /> Verified Purchase
+                  {rev.images && rev.images.length > 0 && (
+                    <div className="flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
+                      {rev.images.map((img, i) => (
+                        <div key={i} className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden border border-brand-card/30">
+                          <img src={img} alt={`Review attachment ${i+1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -4,6 +4,7 @@ import { ShoppingBag, User, Menu, X, LogOut } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
 import { CartDrawer } from "./CartDrawer";
+import { API_URL } from "../config";
 
 export const Navbar = () => {
   const { cartCount } = useCart();
@@ -11,7 +12,25 @@ export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  const [announcementText, setAnnouncementText] = useState("GOLD JEWELLERY 💰 • VISIT SHOWROOM TODAY • LIMITED TIME OFFER! GET 2% MAKING CHARGES ON GOLD JEWELLERY - SHOP NOW • TRUSTED JEWELLERY IN NADIAD ✨ •");
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchAnnouncement = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/content/announcement_bar`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.content && data.content.text) {
+            setAnnouncementText(data.content.text);
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to fetch announcement text", err);
+      }
+    };
+    fetchAnnouncement();
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -32,8 +51,22 @@ export const Navbar = () => {
 
   return (
     <>
+      {/* Announcement Bar */}
+      {announcementText && (
+        <div className="fixed top-0 left-0 right-0 h-10 bg-brand-dark text-white z-50 flex items-center overflow-hidden">
+          <div className="flex whitespace-nowrap animate-marquee">
+            <span className="mx-4 text-[10px] sm:text-xs tracking-widest uppercase flex items-center">
+              {announcementText} &nbsp;&bull;&nbsp;
+            </span>
+            <span className="mx-4 text-[10px] sm:text-xs tracking-widest uppercase flex items-center">
+              {announcementText} &nbsp;&bull;&nbsp;
+            </span>
+          </div>
+        </div>
+      )}
+
       <header
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
+        className={`fixed top-10 left-0 right-0 z-40 transition-all duration-300 ${
           isScrolled || isMobileMenuOpen
             ? "bg-white border-b border-brand-card/30 shadow-sm py-4"
             : "bg-transparent py-5"

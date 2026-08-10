@@ -27,7 +27,6 @@ from schemas import (
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
     ProductCreate, ProductUpdate, OrderStatusUpdate,
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
-    ReviewCreate, ReviewResponse,
     ReviewCreate, ReviewUpdate, ReviewResponse
 )
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
@@ -1363,118 +1362,6 @@ async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, cur
     
     return {"message": "Inventory adjusted successfully"}
 
-# --- Returns & Refunds Routes ---
-@app.post("/api/orders/{order_id}/return")
-async def request_return(order_id: str, request: ReturnRequest, current_user: dict = Depends(get_current_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    if order.get("user_id") != current_user.get("email") and order.get("email") != current_user.get("email"):
-        raise HTTPException(status_code=403, detail="Not authorized to return this order")
-
-    if order.get("status") != "delivered":
-        raise HTTPException(status_code=400, detail="Only delivered orders can be returned")
-
-    await orders_collection.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": {
-            "return_status": "requested",
-            "return_reason": request.return_reason
-        }}
-    )
-    return {"message": "Return requested successfully"}
-
-@app.post("/api/admin/orders/{order_id}/return/approve")
-async def approve_return(order_id: str, current_admin: dict = Depends(get_admin_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    db_settings = await settings_collection.find_one({})
-    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
-    
-    if not delhivery_token or delhivery_token == "mock_token":
-        await orders_collection.update_one(
-            {"_id": ObjectId(order_id)},
-            {"$set": {
-                "return_status": "approved",
-                "reverse_waybill": "MOCK_REVERSE_AWB_123"
-            }}
-        )
-        return {"message": "Return approved successfully (mock)", "reverse_waybill": "MOCK_REVERSE_AWB_123"}
-        
-    # Delhivery Reverse Pickup
-    delhivery_env = db_settings.get("delhivery_env", "sandbox")
-    url = "https://track.delhivery.com/api/cmu/create.json" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/cmu/create.json"
-    
-    payload = {
-        "format": "json",
-        "data": {
-            "pickup_location": {
-                "name": order.get("name", "Customer"),
-                "city": order.get("city", ""),
-                "pin": order.get("pincode", ""),
-                "country": "India",
-                "phone": order.get("phone", ""),
-                "add": order.get("address", "")
-            },
-            "shipments": [
-                {
-                    "name": order.get("name", "Customer"),
-                    "add": order.get("address", ""),
-                    "pin": order.get("pincode", ""),
-                    "city": order.get("city", ""),
-                    "state": order.get("state", ""),
-                    "country": "India",
-                    "phone": order.get("phone", ""),
-                    "order": f"RET-{order.get('order_number')}",
-                    "products_desc": "Return Items",
-                    "return_address": {
-                        "name": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
-                        "city": "Mumbai",
-                        "pin": "400001",
-                        "country": "India",
-                        "add": "Luscentglow Return Center"
-                    }
-                }
-            ]
-        }
-    }
-    
-    try:
-        async with httpx.AsyncClient() as client:
-            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
-            if res.status_code == 200:
-                res_data = res.json()
-                waybill = res_data.get("packages", [{}])[0].get("waybill") if "packages" in res_data else "UNKNOWN_AWB"
-                await orders_collection.update_one(
-                    {"_id": ObjectId(order_id)},
-                    {"$set": {
-                        "return_status": "approved",
-                        "reverse_waybill": waybill
-                    }}
-                )
-                return {"message": "Return approved and reverse pickup scheduled", "response": res_data, "reverse_waybill": waybill}
-            else:
-                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to schedule reverse pickup: {str(e)}")
-
-@app.post("/api/admin/orders/{order_id}/return/refund")
-async def process_refund(order_id: str, current_admin: dict = Depends(get_admin_user)):
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-        
-    await orders_collection.update_one(
-        {"_id": ObjectId(order_id)},
-        {"$set": {
-            "return_status": "refunded",
-            "refund_status": "refunded"
-        }}
-    )
-    return {"message": "Refund processed successfully"}
 
 # --- Newsletter Subscription Route ---
 class SubscribeRequest(BaseModel):
