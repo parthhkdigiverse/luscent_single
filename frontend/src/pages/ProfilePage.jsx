@@ -17,11 +17,14 @@ export const ProfilePage = () => {
   const [orders, setOrders] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
 
-  // Return Form State
-  const [returnModalOpen, setReturnModalOpen] = useState(false);
-  const [selectedReturnOrder, setSelectedReturnOrder] = useState(null);
-  const [returnReason, setReturnReason] = useState("");
-  const [returnMessage, setReturnMessage] = useState("");
+
+  // Review Form State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewOrder, setReviewOrder] = useState(null);
+  const [reviewProduct, setReviewProduct] = useState(null);
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [reviewMessage, setReviewMessage] = useState("");
 
   // Profile Details Form State
   const [name, setName] = useState(user?.name || "");
@@ -60,7 +63,7 @@ export const ProfilePage = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewTitle, setReviewTitle] = useState("");
   const [reviewComment, setReviewComment] = useState("");
-  const [reviewMessage, setReviewMessage] = useState("");
+  const [reviewImages, setReviewImages] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
   const [userReviews, setUserReviews] = useState({});
 
@@ -79,10 +82,12 @@ export const ProfilePage = () => {
       setReviewRating(existing.rating || 5);
       setReviewTitle(existing.title || "");
       setReviewComment(existing.comment || "");
+      setReviewImages(existing.images || []);
     } else {
       setReviewRating(5);
       setReviewTitle("");
       setReviewComment("");
+      setReviewImages([]);
     }
     setShowReviewModal(true);
   };
@@ -107,7 +112,8 @@ export const ProfilePage = () => {
           name: user?.name || "Customer",
           rating: reviewRating,
           title: reviewTitle,
-          comment: reviewComment
+          comment: reviewComment,
+          images: reviewImages
         })
       });
       if (res.ok) {
@@ -117,7 +123,8 @@ export const ProfilePage = () => {
           [reviewProductId]: {
             rating: reviewRating,
             title: reviewTitle,
-            comment: reviewComment
+            comment: reviewComment,
+            images: reviewImages
           }
         };
         setUserReviews(updated);
@@ -233,53 +240,6 @@ export const ProfilePage = () => {
     setTimeout(() => setSaveSuccess(""), 4000);
   };
 
-  const openReturnModal = (order) => {
-    setSelectedReturnOrder(order);
-    setReturnReason("");
-    setReturnMessage("");
-    setReturnModalOpen(true);
-  };
-
-  const submitReturnRequest = async () => {
-    if (!returnReason.trim()) {
-      setReturnMessage("Please provide a reason for the return.");
-      return;
-    }
-    try {
-      const token = localStorage.getItem("luscent_token");
-      const orderId = selectedReturnOrder._id || selectedReturnOrder.id;
-      if (!orderId) {
-        setReturnMessage("Order ID not found.");
-        return;
-      }
-      
-      const res = await fetch(`${API_URL}/api/orders/${orderId}/return`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ return_reason: returnReason })
-      });
-      
-      if (res.ok) {
-        // Update local state
-        setOrders(orders.map(o => {
-          if (o._id === orderId || o.id === orderId) {
-            return { ...o, return_status: "requested", return_reason: returnReason };
-          }
-          return o;
-        }));
-        setReturnModalOpen(false);
-      } else {
-        const errorData = await res.json();
-        setReturnMessage(errorData.detail || "Failed to request return.");
-      }
-    } catch (err) {
-      console.error(err);
-      setReturnMessage("Error submitting return request.");
-    }
-  };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
@@ -542,7 +502,7 @@ export const ProfilePage = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
-                            {order.items?.length > 0 && (() => {
+                            {order.items?.length > 0 && order.status === "delivered" && (() => {
                               const pid = order.items[0].id || order.items[0].product_id;
                               const existing = userReviews[pid];
                               return (
@@ -593,17 +553,6 @@ export const ProfilePage = () => {
                         <div className="pt-3 border-t border-brand-card/40 flex justify-between items-center text-xs">
                           <span className="text-brand-grey flex flex-wrap items-center gap-2">
                             Payment: <strong className="text-brand-dark uppercase text-[11px]">{order.paymentMethod || "COD"}</strong>
-                            
-                            {order.status === "delivered" && !order.return_status && (
-                              <button onClick={() => openReturnModal(order)} className="text-amber-600 hover:text-amber-700 underline text-[11px] font-semibold ml-2">
-                                Request Return
-                              </button>
-                            )}
-                            {order.return_status && (
-                              <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ml-2 border border-amber-200/50">
-                                Return {order.return_status}
-                              </span>
-                            )}
                           </span>
                           <div>
                             <span className="text-brand-grey">Total: </span>
@@ -937,48 +886,57 @@ export const ProfilePage = () => {
         </div>
       )}
 
-      {/* Return Request Modal */}
-      {returnModalOpen && (
+
+      {/* Review Request Modal */}
+      {reviewModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-brand-dark/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl relative animate-fadeIn">
             <button
-              onClick={() => setReturnModalOpen(false)}
+              onClick={() => setReviewModalOpen(false)}
               className="absolute top-5 right-5 text-brand-grey hover:text-brand-dark transition bg-brand-bg/50 rounded-full p-1.5"
             >
               <X size={18} />
             </button>
 
-            <h3 className="font-serif text-xl font-semibold text-brand-dark mb-1">Request Return</h3>
-            <p className="text-xs text-brand-grey mb-5">Order #{selectedReturnOrder?.order_number}</p>
+            <h3 className="font-serif text-xl font-semibold text-brand-dark mb-1">Write a Review</h3>
+            <p className="text-xs text-brand-grey mb-5">For {reviewProduct?.name}</p>
 
-            {returnMessage && (
+            {reviewMessage && (
               <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-semibold">
-                {returnMessage}
+                {reviewMessage}
               </div>
             )}
 
-            <div className="space-y-4">
+            <div className="space-y-4 text-left">
               <div>
-                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Reason for Return</label>
-                <select 
-                  value={returnReason}
-                  onChange={(e) => setReturnReason(e.target.value)}
-                  className="w-full p-3 bg-brand-bg/40 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
-                >
-                  <option value="">Select a reason</option>
-                  <option value="Damaged product">Product was damaged or defective</option>
-                  <option value="Wrong item">Received wrong item</option>
-                  <option value="Not satisfied">Not satisfied with the product</option>
-                  <option value="Other">Other</option>
-                </select>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Rating</label>
+                <div className="flex gap-2 mb-2">
+                  {[1, 2, 3, 4, 5].map(star => (
+                    <button key={star} onClick={() => setRating(star)} className="focus:outline-none">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill={star <= rating ? "#F59E0B" : "none"} stroke={star <= rating ? "#F59E0B" : "#D1D5DB"} strokeWidth="1.5">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-brand-dark block mb-2">Comment</label>
+                <textarea 
+                  value={comment}
+                  onChange={(e) => setComment(e.target.value)}
+                  placeholder="What did you like or dislike?"
+                  className="w-full p-3 bg-brand-bg/40 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition min-h-[100px] resize-none"
+                />
               </div>
 
               <div className="pt-4 flex justify-end gap-3 border-t border-brand-card/30">
-                <Button type="button" onClick={() => setReturnModalOpen(false)} variant="outline" className="py-2 px-4 border text-xs">
+                <Button type="button" onClick={() => setReviewModalOpen(false)} variant="outline" className="py-2 px-4 border text-xs">
                   Cancel
                 </Button>
-                <Button onClick={submitReturnRequest} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
-                  Submit Request
+                <Button onClick={submitReview} className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">
+                  Submit Review
                 </Button>
               </div>
             </div>
@@ -1099,6 +1057,79 @@ export const ProfilePage = () => {
                   ></textarea>
                 </div>
 
+                <div>
+                  <label className="font-semibold block mb-1">Images (Optional, up to 3)</label>
+                  <div className="flex flex-wrap gap-3 mb-2">
+                    {reviewImages.map((imgStr, idx) => (
+                      <div key={idx} className="relative w-16 h-16 rounded-xl border border-brand-card/50 overflow-hidden group">
+                        <img src={imgStr} alt="Review" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setReviewImages(reviewImages.filter((_, i) => i !== idx))}
+                          className="absolute top-1 right-1 bg-black/50 hover:bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {reviewImages.length < 3 && (
+                      <label className="w-16 h-16 rounded-xl border-2 border-dashed border-brand-card flex flex-col items-center justify-center text-brand-grey hover:bg-brand-bg/50 cursor-pointer transition">
+                        <Plus size={16} />
+                        <span className="text-[10px] font-bold mt-1">Add</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          multiple
+                          onChange={async (e) => {
+                            const files = Array.from(e.target.files);
+                            const allowed = 3 - reviewImages.length;
+                            const toProcess = files.slice(0, allowed);
+                            for (const file of toProcess) {
+                              if (file.size > 15 * 1024 * 1024) {
+                                alert(`File ${file.name} is larger than 15MB`);
+                                continue;
+                              }
+                              // Compress image using canvas
+                              const compressed = await new Promise((resolve) => {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const img = new Image();
+                                  img.onload = () => {
+                                    const canvas = document.createElement("canvas");
+                                    let width = img.width;
+                                    let height = img.height;
+                                    const MAX_DIM = 1000;
+                                    if (width > height) {
+                                      if (width > MAX_DIM) {
+                                        height *= MAX_DIM / width;
+                                        width = MAX_DIM;
+                                      }
+                                    } else {
+                                      if (height > MAX_DIM) {
+                                        width *= MAX_DIM / height;
+                                        height = MAX_DIM;
+                                      }
+                                    }
+                                    canvas.width = width;
+                                    canvas.height = height;
+                                    const ctx = canvas.getContext("2d");
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    resolve(canvas.toDataURL("image/jpeg", 0.7));
+                                  };
+                                  img.src = event.target.result;
+                                };
+                                reader.readAsDataURL(file);
+                              });
+                              setReviewImages(prev => [...prev, compressed]);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
                 <div className="pt-2 flex justify-end gap-3">
                   <Button type="button" variant="outline" onClick={() => setShowReviewModal(false)}>Cancel</Button>
                   <Button type="submit" variant="primary" disabled={submittingReview}>
@@ -1110,6 +1141,7 @@ export const ProfilePage = () => {
           </div>
         )}
       </AnimatePresence>
+
 
     </div>
   );

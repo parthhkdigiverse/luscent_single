@@ -44,7 +44,7 @@ const AppContent = () => {
       {!isAdminPath && <Navbar />}
 
       {/* Main Page Content */}
-      <main className="flex-grow bg-[#FAF8F5]">
+      <main className={`flex-grow bg-[#FAF8F5] ${!isAdminPath ? 'pt-10' : ''}`}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/product/:slug" element={<ProductPage />} />

@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart, CheckCircle2, Award, DropletOff, Leaf } from "lucide-react";
 import { Button } from "../components/Button";
 import { RatingStars } from "../components/RatingStars";
 import { ProductGallery } from "../components/ProductGallery";
 import { BenefitBadge } from "../components/BenefitBadge";
 import { HowToUseSteps } from "../components/HowToUseSteps";
 import { IngredientAccordion } from "../components/IngredientAccordion";
+import { FAQAccordion } from "../components/FAQAccordion";
 import { useCart } from "../context/CartContext";
+import { TrustBadgeStrip } from "../components/TrustBadgeStrip";
 import { API_URL } from "../config";
 
 export const ProductPage = () => {
@@ -20,6 +22,7 @@ export const ProductPage = () => {
   const [activeTab, setActiveTab] = useState("description");
   const [addedNotify, setAddedNotify] = useState(false);
   const [reviews, setReviews] = useState([]);
+  const [zoomImage, setZoomImage] = useState(null);
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -32,6 +35,15 @@ export const ProductPage = () => {
         if (!resProduct.ok) throw new Error("Failed to fetch product");
         const data = await resProduct.json();
         setProduct(data);
+        
+        try {
+          const resReviews = await fetch(`${API_URL}/api/products/${data.id || data._id}/reviews`, { cache: 'no-store' });
+          if (resReviews.ok) {
+            setReviews(await resReviews.json());
+          }
+        } catch (e) {
+          console.error("Failed to fetch reviews");
+        }
         
         if (resAll.ok) {
           const allData = await resAll.json();
@@ -229,28 +241,44 @@ export const ProductPage = () => {
             )}
           </div>
 
-          {/* Trust points */}
-          <div className="grid grid-cols-3 gap-2 py-4 border-t border-brand-card/40 text-center">
-            <div className="flex items-center gap-1.5 justify-center">
-              <ShieldCheck size={14} className="text-brand-green" />
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-brand-dark">Dermat Tested</span>
+          {/* Trust badges */}
+          <div className="grid grid-cols-3 gap-4 pt-6 pb-2 border-t border-brand-card/40">
+            <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
+              <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
+                <Award size={18} className="stroke-[1.5]" />
+              </div>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Dermat Tested</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">Clinically Safe</span>
             </div>
-            <div className="flex items-center gap-1.5 justify-center">
-              <ShieldCheck size={14} className="text-brand-green" />
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-brand-dark">Fragrance Free</span>
+            
+            <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
+              <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
+                <DropletOff size={18} className="stroke-[1.5]" />
+              </div>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Fragrance Free</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">Zero Perfumes</span>
             </div>
-            <div className="flex items-center gap-1.5 justify-center">
-              <ShieldCheck size={14} className="text-brand-green" />
-              <span className="text-[10px] uppercase tracking-wider font-semibold text-brand-dark">Clean Sourcing</span>
+
+            <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
+              <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
+                <Leaf size={18} className="stroke-[1.5]" />
+              </div>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Clean Source</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">100% Ethical</span>
             </div>
           </div>
         </div>
       </div>
 
+      {/* Trust Badges Strip */}
+      <div className="border-t border-brand-card/30 pt-8">
+        <TrustBadgeStrip />
+      </div>
+
       {/* Accordion / Tabs Details */}
       <section className="border-t border-brand-card/40 pt-12 text-left">
         <div className="flex border-b border-brand-card/40 mb-6 gap-6 overflow-x-auto pb-1">
-          {["description", "benefits", "how-to-use", "ingredients", "caution"].map((tab) => {
+          {["description", "benefits", "how-to-use", "ingredients", "faq", "caution"].map((tab) => {
             if (tab === "caution" && !product.caution) return null;
             return (
               <button
@@ -300,6 +328,18 @@ export const ProductPage = () => {
           {activeTab === "ingredients" && (
             <div className="max-w-2xl">
               <IngredientAccordion actives={product.keyActives} fullList={product.ingredients} />
+            </div>
+          )}
+
+          {activeTab === "faq" && (
+            <div className="max-w-2xl">
+              {product.faqs && product.faqs.length > 0 ? (
+                <FAQAccordion items={product.faqs} />
+              ) : (
+                <div className="text-left text-sm text-brand-grey py-8 border border-dashed border-brand-card/60 rounded-2xl px-6 bg-brand-bg/30">
+                  No FAQs available for this product yet. Check back later!
+                </div>
+              )}
             </div>
           )}
 
@@ -361,7 +401,20 @@ export const ProductPage = () => {
                   {rev.title && (
                     <strong className="text-brand-dark text-xs block truncate">{rev.title}</strong>
                   )}
-                  <p className="text-brand-grey text-[11px] leading-tight line-clamp-2 mt-0.5">{rev.comment}</p>
+                  <p className="text-brand-grey text-[11px] leading-tight mt-0.5">{rev.comment}</p>
+                  {rev.images && rev.images.length > 0 && (
+                    <div className="flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
+                      {rev.images.map((img, i) => (
+                        <div 
+                          key={i} 
+                          className="w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden border border-brand-card/30 cursor-zoom-in hover:opacity-85 transition-opacity"
+                          onClick={() => setZoomImage(img)}
+                        >
+                          <img src={img} alt={`Review attachment ${i+1}`} className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -370,7 +423,7 @@ export const ProductPage = () => {
       </section>
 
       {/* You May Also Like (Cross Sell) */}
-      <section className="border-t border-brand-card/40 pt-16">
+      <section className="border-t border-brand-card/40 pt-16 mt-16">
         <h2 className="font-serif text-2xl md:text-3xl text-left font-medium text-brand-dark mb-8">
           Complete Your Ritual
         </h2>
@@ -400,6 +453,28 @@ export const ProductPage = () => {
           ))}
         </div>
       </section>
+
+      {/* Image Zoom Lightbox Modal */}
+      {zoomImage && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 animate-fade-in"
+          onClick={() => setZoomImage(null)}
+        >
+          <div className="relative max-w-3xl max-h-[85vh] overflow-hidden bg-white rounded-3xl p-1.5 shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
+            <button 
+              className="absolute top-4 right-4 w-9 h-9 bg-black/60 hover:bg-black/85 text-white rounded-full flex items-center justify-center transition-colors font-bold text-sm z-10"
+              onClick={() => setZoomImage(null)}
+            >
+              ✕
+            </button>
+            <img 
+              src={zoomImage} 
+              alt="Zoomed review attachment" 
+              className="max-w-full max-h-[80vh] object-contain rounded-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

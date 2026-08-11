@@ -75,6 +75,7 @@ class ProductBase(BaseModel):
     caution: Optional[List[str]] = None
     tags: List[str]
     images: List[str]
+    faqs: Optional[List[dict]] = []
 
 class ProductResponse(ProductBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -104,6 +105,7 @@ class ProductUpdate(BaseModel):
     caution: Optional[List[str]] = None
     tags: Optional[List[str]] = None
     images: Optional[List[str]] = None
+    faqs: Optional[List[dict]] = None
 
 # Order Schemas
 class OrderItem(BaseModel):
@@ -135,10 +137,7 @@ class OrderResponse(OrderCreate):
     is_deleted: bool = False
     tracking_number: Optional[str] = None
     carrier: Optional[str] = None
-    return_status: Optional[str] = None
-    return_reason: Optional[str] = None
-    reverse_waybill: Optional[str] = None
-    refund_status: Optional[str] = None
+
 
     class Config:
         populate_by_name = True
@@ -147,8 +146,36 @@ class OrderResponse(OrderCreate):
 class OrderStatusUpdate(BaseModel):
     status: str
 
-class ReturnRequest(BaseModel):
-    return_reason: str
+
+
+# Review Schemas
+class ReviewBase(BaseModel):
+    product_id: str
+    order_id: Optional[str] = "direct"
+    user_name: Optional[str] = "Customer"
+    name: Optional[str] = "Customer"
+    user_email: Optional[str] = ""
+    title: Optional[str] = ""
+    rating: int
+    comment: str
+    images: Optional[List[str]] = []
+
+class ReviewCreate(BaseModel):
+    product_id: str
+    name: Optional[str] = "Customer"
+    title: Optional[str] = ""
+    rating: int
+    comment: str
+    images: Optional[List[str]] = []
+
+class ReviewResponse(ReviewBase):
+    db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    created_at: datetime
+    
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
 
 # Contact Schemas
 class ContactCreate(BaseModel):
@@ -265,6 +292,7 @@ class ReviewCreate(BaseModel):
     rating: int  # 1 to 5
     title: str
     comment: str
+    images: Optional[List[str]] = []
 
 class ReviewUpdate(BaseModel):
     product_id: Optional[str] = None
@@ -272,10 +300,14 @@ class ReviewUpdate(BaseModel):
     rating: Optional[int] = None
     title: Optional[str] = None
     comment: Optional[str] = None
+    images: Optional[List[str]] = None
 
 class ReviewResponse(ReviewCreate):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     user_id: Optional[str] = None
+    order_id: Optional[str] = "direct"
+    user_name: Optional[str] = "Customer"
+    user_email: Optional[str] = ""
     created_at: datetime
 
     class Config:
