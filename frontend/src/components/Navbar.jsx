@@ -55,12 +55,11 @@ export const Navbar = () => {
       {announcementText && (
         <div className="fixed top-0 left-0 right-0 h-10 bg-brand-dark text-white z-50 flex items-center overflow-hidden">
           <div className="flex whitespace-nowrap animate-marquee">
-            <span className="mx-4 text-[10px] sm:text-xs tracking-widest uppercase flex items-center">
-              {announcementText} &nbsp;&bull;&nbsp;
-            </span>
-            <span className="mx-4 text-[10px] sm:text-xs tracking-widest uppercase flex items-center">
-              {announcementText} &nbsp;&bull;&nbsp;
-            </span>
+            {[...Array(15)].map((_, i) => (
+              <span key={i} className="mx-4 text-[10px] sm:text-xs tracking-widest uppercase flex items-center">
+                {announcementText} &nbsp;&bull;&nbsp;
+              </span>
+            ))}
           </div>
         </div>
       )}
