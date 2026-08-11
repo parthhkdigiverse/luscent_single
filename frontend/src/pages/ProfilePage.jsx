@@ -502,7 +502,7 @@ export const ProfilePage = () => {
                           </div>
 
                           <div className="flex items-center gap-3">
-                            {order.items?.length > 0 && (() => {
+                            {order.items?.length > 0 && order.status === "delivered" && (() => {
                               const pid = order.items[0].id || order.items[0].product_id;
                               const existing = userReviews[pid];
                               return (

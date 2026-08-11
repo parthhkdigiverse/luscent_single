@@ -1261,28 +1261,6 @@ async def admin_create_review(review: dict, current_admin: dict = Depends(get_ad
     new_review["_id"] = result.inserted_id
     return new_review
 
-@app.put("/api/admin/reviews/{review_id}", response_model=ReviewResponse)
-async def admin_update_review(review_id: str, review: dict, current_admin: dict = Depends(get_admin_user)):
-    update_data = {}
-    if "rating" in review: update_data["rating"] = review["rating"]
-    if "comment" in review: update_data["comment"] = review["comment"]
-    if "user_name" in review:
-        update_data["user_name"] = review["user_name"]
-        update_data["name"] = review["user_name"]
-    if "name" in review:
-        update_data["name"] = review["name"]
-        update_data["user_name"] = review["name"]
-    if "title" in review: update_data["title"] = review["title"]
-    if "images" in review: update_data["images"] = review["images"]
-    
-    if update_data:
-        await reviews_collection.update_one({"_id": ObjectId(review_id)}, {"$set": update_data})
-        
-    updated = await reviews_collection.find_one({"_id": ObjectId(review_id)})
-    if not updated:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return updated
-
 
 # --- Inventory Routes ---
 @app.get("/api/admin/inventory", response_model=List[InventoryResponse])
@@ -1499,7 +1477,7 @@ async def update_review(review_id: str, review_in: ReviewUpdate, current_user: d
     try:
         obj_id = ObjectId(review_id)
     except:
-        raise HTTPException(status_code=400, detail="Invalid review ID")
+        obj_id = review_id
         
     existing_review = await reviews_collection.find_one({"_id": obj_id})
     if not existing_review:
