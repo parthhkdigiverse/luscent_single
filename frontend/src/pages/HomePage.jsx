@@ -11,6 +11,7 @@ import { TestimonialCard } from "../components/TestimonialCard";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { ScrollReveal } from "../components/ScrollReveal";
 import { BeforeAfterComparison } from "../components/BeforeAfterComparison";
+import { OfferCard } from "../components/OfferCard";
 import { API_URL } from "../config";
 
 const defaultHeroSlides = [
@@ -50,6 +51,7 @@ export const HomePage = () => {
   const [faqList, setFaqList] = useState(staticFaqs);
   const [beforeImage, setBeforeImage] = useState("/before-skin.png");
   const [afterImage, setAfterImage] = useState("/after-skin.png");
+  const [offerCardData, setOfferCardData] = useState(null);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -79,6 +81,9 @@ export const HomePage = () => {
           if (data.before_after) {
             if (data.before_after.beforeImage) setBeforeImage(data.before_after.beforeImage);
             if (data.before_after.afterImage) setAfterImage(data.before_after.afterImage);
+          }
+          if (data.offer_card) {
+            setOfferCardData(data.offer_card);
           }
         }
       } catch (err) {
@@ -197,6 +202,21 @@ export const HomePage = () => {
       <ScrollReveal className="max-w-7xl mx-auto px-6 mt-8">
         <TrustBadgeStrip />
       </ScrollReveal>
+
+      {/* 2.5 Special Offers */}
+      {offerCardData?.isActive && (
+        <section className="max-w-7xl mx-auto px-6 mt-16">
+          <ScrollReveal>
+            <OfferCard 
+              title={offerCardData.title}
+              description={offerCardData.description}
+              code={offerCardData.code}
+              link={offerCardData.link}
+              linkText={offerCardData.linkText}
+            />
+          </ScrollReveal>
+        </section>
+      )}
 
       {/* 3. Shop by Product */}
       <section className="max-w-7xl mx-auto px-6 mt-24">

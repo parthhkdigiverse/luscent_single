@@ -3046,6 +3046,14 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   const [localContact, setLocalContact] = useState(contactInfo);
   const [localAuthPoster, setLocalAuthPoster] = useState(authPoster);
   const [localBeforeAfter, setLocalBeforeAfter] = useState(contentBlocks.before_after || { beforeImage: "/before-skin.png", afterImage: "/after-skin.png" });
+  const [localOfferCard, setLocalOfferCard] = useState(contentBlocks.offer_card || { 
+    title: "Summer Sale is Live", 
+    description: "Get 20% OFF on all skincare bundles. Upgrade your routine with our clinical actives.", 
+    code: "GLOW20", 
+    link: "/category/bundles", 
+    linkText: "Shop Bundles",
+    isActive: true 
+  });
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [activeTab, setActiveTab] = useState("hero");
 
@@ -3058,6 +3066,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     { id: "contact", label: "Contact Info" },
     { id: "auth", label: "Login / Signup Poster" },
     { id: "before_after", label: "Before & After Images" },
+    { id: "offer_card", label: "Offer Card" },
   ];
 
   // Sync with parent when contentBlocks change
@@ -3070,6 +3079,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     if (contentBlocks.contact_info) setLocalContact(contentBlocks.contact_info);
     if (contentBlocks.auth_poster) setLocalAuthPoster(contentBlocks.auth_poster);
     if (contentBlocks.before_after) setLocalBeforeAfter(contentBlocks.before_after);
+    if (contentBlocks.offer_card) setLocalOfferCard(contentBlocks.offer_card);
   }, [contentBlocks]);
 
   // ─── Hero Slide Helpers ───
@@ -3460,7 +3470,61 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
         </div>
       )}
 
+      {/* ═══════ 9. OFFER CARD ═══════ */}
+      {activeTab === "offer_card" && (
+        <div className={sectionCardClass}>
+          <h4 className={sectionTitleClass}>Dynamic Offer Card</h4>
+          <div className="p-4 bg-white border border-brand-card/30 rounded-xl space-y-4">
+            
+            {/* Toggle Active Status */}
+            <div className="flex items-center gap-3 mb-2 p-3 bg-brand-card/20 rounded-lg">
+              <input 
+                type="checkbox" 
+                id="offer_active"
+                checked={localOfferCard.isActive}
+                onChange={(e) => setLocalOfferCard({ ...localOfferCard, isActive: e.target.checked })}
+                className="w-5 h-5 accent-brand-accent cursor-pointer"
+              />
+              <label htmlFor="offer_active" className="text-sm font-semibold text-brand-dark cursor-pointer select-none">
+                Enable Offer Card on Homepage
+              </label>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Title</label>
+                <input type="text" value={localOfferCard.title} onChange={(e) => setLocalOfferCard({ ...localOfferCard, title: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Promo Code</label>
+                <input type="text" value={localOfferCard.code} onChange={(e) => setLocalOfferCard({ ...localOfferCard, code: e.target.value })} className={inputClass} placeholder="e.g. GLOW20 (Leave blank for none)" />
+              </div>
+            </div>
+            
+            <div>
+              <label className={labelClass}>Description</label>
+              <textarea rows={2} value={localOfferCard.description} onChange={(e) => setLocalOfferCard({ ...localOfferCard, description: e.target.value })} className={inputClass + " resize-none"} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className={labelClass}>Button Link URL</label>
+                <input type="text" value={localOfferCard.link} onChange={(e) => setLocalOfferCard({ ...localOfferCard, link: e.target.value })} className={inputClass} />
+              </div>
+              <div>
+                <label className={labelClass}>Button Text</label>
+                <input type="text" value={localOfferCard.linkText} onChange={(e) => setLocalOfferCard({ ...localOfferCard, linkText: e.target.value })} className={inputClass} />
+              </div>
+            </div>
+
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => saveSection("offer_card", localOfferCard)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
+              {contentSaving ? "Saving..." : "Save Offer Card"}
+            </Button>
+          </div>
+        </div>
+      )}
 
         </div> {/* End of Main Content Area */}
       </div> {/* End of Grid Layout */}
