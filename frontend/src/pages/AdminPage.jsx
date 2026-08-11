@@ -9,6 +9,7 @@ import { API_URL } from "../config";
 import { Button } from "../components/Button";
 import { useSearchParams } from "react-router-dom";
 import { OurStoryPage } from "./OurStoryPage";
+import { faqs as defaultFaqs } from "../data/faqs";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
@@ -123,6 +124,7 @@ export const AdminPage = () => {
   const [adminReviewComment, setAdminReviewComment] = useState("");
   const [adminReviewImages, setAdminReviewImages] = useState([]);
   const [submittingAdminReview, setSubmittingAdminReview] = useState(false);
+  const [zoomReviewImage, setZoomReviewImage] = useState(null);
   const [reviewSearchQuery, setReviewSearchQuery] = useState("");
   const [reviewRatingFilter, setReviewRatingFilter] = useState("all");
   const [prodBenefits, setProdBenefits] = useState("");
@@ -808,24 +810,50 @@ export const AdminPage = () => {
     }
   };
 
-  const handleAdminReviewImageUpload = (e) => {
+  const handleAdminReviewImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (adminReviewImages.length + files.length > 3) {
       alert("You can only upload a maximum of 3 images.");
       return;
     }
     
-    files.forEach(file => {
-      if (file.size > 2 * 1024 * 1024) {
-        alert(`File ${file.name} is larger than 2MB`);
-        return;
+    for (const file of files) {
+      if (file.size > 15 * 1024 * 1024) {
+        alert(`File ${file.name} is larger than 15MB`);
+        continue;
       }
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setAdminReviewImages(prev => [...prev, e.target.result]);
-      };
-      reader.readAsDataURL(file);
-    });
+      const compressed = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            let width = img.width;
+            let height = img.height;
+            const MAX_DIM = 1000;
+            if (width > height) {
+              if (width > MAX_DIM) {
+                height *= MAX_DIM / width;
+                width = MAX_DIM;
+              }
+            } else {
+              if (height > MAX_DIM) {
+                width *= MAX_DIM / height;
+                height = MAX_DIM;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL("image/jpeg", 0.7));
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+      setAdminReviewImages(prev => [...prev, compressed]);
+    }
   };
 
   // Render Login Gate
@@ -2007,6 +2035,7 @@ export const AdminPage = () => {
                             <th className="p-5 w-32">Product ID</th>
                             <th className="p-5 w-40">User</th>
                             <th className="p-5 w-24">Rating</th>
+                            <th className="p-5 w-36">Images</th>
                             <th className="p-5">Title & Comment</th>
                             <th className="p-5 w-24 text-center">Actions</th>
                           </tr>
@@ -2028,18 +2057,26 @@ export const AdminPage = () => {
                               <td className="p-5 font-bold text-yellow-500">
                                 {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)} ({review.rating})
                               </td>
-                              <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
-                                <strong className="text-brand-dark block text-xs mb-0.5">{review.title}</strong>
-                                <span className="text-xs">{review.comment}</span>
-                                {review.images && review.images.length > 0 && (
-                                  <div className="flex gap-2 mt-2">
+                              <td className="p-5">
+                                {review.images && review.images.length > 0 ? (
+                                  <div className="flex gap-1.5 flex-wrap">
                                     {review.images.map((img, i) => (
-                                      <div key={i} className="w-10 h-10 rounded-md overflow-hidden border border-brand-card/30">
+                                      <div 
+                                        key={i} 
+                                        className="w-10 h-10 rounded-lg overflow-hidden border border-brand-card/30 cursor-zoom-in hover:opacity-80 transition"
+                                        onClick={() => setZoomReviewImage(img)}
+                                      >
                                         <img src={img} alt="Review attachment" className="w-full h-full object-cover" />
                                       </div>
                                     ))}
                                   </div>
+                                ) : (
+                                  <span className="text-brand-grey/50 text-xs font-semibold">-</span>
                                 )}
+                              </td>
+                              <td className="p-5 text-brand-grey whitespace-normal min-w-[300px]">
+                                <strong className="text-brand-dark block text-xs mb-0.5">{review.title}</strong>
+                                <span className="text-xs">{review.comment}</span>
                               </td>
                               <td className="p-5 text-center">
                                 <div className="flex items-center justify-center gap-2">
@@ -2280,6 +2317,27 @@ export const AdminPage = () => {
                 </div>
               </form>
             </motion.div>
+          </div>
+        )}
+
+        {zoomReviewImage && (
+          <div 
+            className="fixed inset-0 bg-black/80 flex items-center justify-center z-[150] p-4 animate-fade-in"
+            onClick={() => setZoomReviewImage(null)}
+          >
+            <div className="relative max-w-3xl max-h-[85vh] overflow-hidden bg-white rounded-3xl p-1.5 shadow-2xl animate-scale-up" onClick={e => e.stopPropagation()}>
+              <button 
+                className="absolute top-4 right-4 w-9 h-9 bg-black/60 hover:bg-black/85 text-white rounded-full flex items-center justify-center transition-colors font-bold text-sm z-10"
+                onClick={() => setZoomReviewImage(null)}
+              >
+                ✕
+              </button>
+              <img 
+                src={zoomReviewImage} 
+                alt="Zoomed review attachment" 
+                className="max-w-full max-h-[80vh] object-contain rounded-2xl"
+              />
+            </div>
           </div>
         )}
 
@@ -2995,197 +3053,6 @@ const ImageUploader = ({ value, onChange, label = "Slide Image" }) => {
   );
 };
 
-const ReviewsTab = ({ API_URL, fetchAuth }) => {
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editingReview, setEditingReview] = useState(null);
-  
-  const [formData, setFormData] = useState({
-    product_id: "",
-    user_name: "",
-    rating: 5,
-    comment: ""
-  });
-
-  const fetchReviews = async () => {
-    try {
-      const res = await fetchAuth(`${API_URL}/api/admin/reviews`);
-      if (res.ok) {
-        const data = await res.json();
-        setReviews(data);
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchReviews();
-  }, []);
-
-  const handleOpenModal = (review = null) => {
-    if (review) {
-      setEditingReview(review);
-      setFormData({
-        product_id: review.product_id,
-        user_name: review.user_name,
-        rating: review.rating,
-        comment: review.comment
-      });
-    } else {
-      setEditingReview(null);
-      setFormData({
-        product_id: "",
-        user_name: "",
-        rating: 5,
-        comment: ""
-      });
-    }
-    setShowModal(true);
-  };
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    try {
-      const url = editingReview 
-        ? `${API_URL}/api/admin/reviews/${editingReview._id || editingReview.id}`
-        : `${API_URL}/api/admin/reviews`;
-      
-      const method = editingReview ? "PUT" : "POST";
-      
-      const res = await fetchAuth(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
-      });
-      
-      if (res.ok) {
-        fetchReviews();
-        setShowModal(false);
-      } else {
-        alert("Failed to save review");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Error saving review");
-    }
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to delete this review?")) return;
-    try {
-      const res = await fetchAuth(`${API_URL}/api/admin/reviews/${id}`, { method: "DELETE" });
-      if (res.ok) {
-        fetchReviews();
-      } else {
-        alert("Failed to delete review");
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  if (loading) return <div className="text-center py-10 text-brand-grey text-sm">Loading reviews...</div>;
-
-  return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-brand-card/30 pb-4">
-        <div>
-          <h3 className="font-serif text-2xl font-bold text-brand-dark">Customer Reviews</h3>
-          <p className="text-xs text-brand-grey mt-1">Manage and moderate product reviews</p>
-        </div>
-        <Button onClick={() => handleOpenModal()} className="py-2 px-4 bg-brand-dark text-white rounded-xl text-xs font-semibold hover:bg-black flex items-center gap-2">
-          <Plus size={16} /> Add Review
-        </Button>
-      </div>
-
-      <div className="bg-white rounded-3xl border border-brand-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-brand-bg/50 border-b border-brand-card">
-              <tr>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Customer</th>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Product ID</th>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Rating</th>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Comment</th>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider">Date</th>
-                <th className="px-6 py-4 font-semibold text-brand-dark uppercase text-[10px] tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-brand-card/50">
-              {reviews.map(review => (
-                <tr key={review._id || review.id} className="hover:bg-brand-bg/30 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="font-semibold text-brand-dark text-xs">{review.user_name}</div>
-                    <div className="text-[10px] text-brand-grey">{review.user_email}</div>
-                  </td>
-                  <td className="px-6 py-4 text-xs font-semibold text-brand-dark">{review.product_id}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex text-yellow-500">
-                      {[...Array(review.rating)].map((_, i) => <Star key={i} size={12} fill="currentColor" />)}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-[11px] text-brand-grey max-w-xs truncate">{review.comment}</td>
-                  <td className="px-6 py-4 text-[11px] text-brand-grey">{new Date(review.created_at).toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-right space-x-2">
-                    <button onClick={() => handleOpenModal(review)} className="text-brand-dark hover:text-brand-grey transition p-1">
-                      <Edit2 size={14} />
-                    </button>
-                    <button onClick={() => handleDelete(review._id || review.id)} className="text-red-500 hover:text-red-700 transition p-1">
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {reviews.length === 0 && (
-                <tr>
-                  <td colSpan="6" className="px-6 py-8 text-center text-brand-grey text-xs">No reviews found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-brand-dark/40 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-6 w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center mb-5">
-              <h3 className="font-serif text-xl font-semibold text-brand-dark">{editingReview ? "Edit Review" : "Add Review"}</h3>
-              <button onClick={() => setShowModal(false)} className="text-brand-grey hover:text-brand-dark"><X size={20} /></button>
-            </div>
-            <form onSubmit={handleSave} className="space-y-4">
-              <div>
-                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Product ID</label>
-                <input required type="text" value={formData.product_id} onChange={e => setFormData({...formData, product_id: e.target.value})} disabled={!!editingReview} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Customer Name</label>
-                <input required type="text" value={formData.user_name} onChange={e => setFormData({...formData, user_name: e.target.value})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Rating (1-5)</label>
-                <input required type="number" min="1" max="5" value={formData.rating} onChange={e => setFormData({...formData, rating: parseInt(e.target.value)})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
-              </div>
-              <div>
-                <label className="text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5 block">Comment</label>
-                <textarea required value={formData.comment} onChange={e => setFormData({...formData, comment: e.target.value})} className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark min-h-[100px]" />
-              </div>
-              <div className="pt-2 flex justify-end gap-3">
-                <Button type="button" onClick={() => setShowModal(false)} variant="outline" className="py-2 px-4 border text-xs">Cancel</Button>
-                <Button type="submit" className="py-2 px-5 bg-brand-dark text-white hover:bg-black text-xs font-semibold">Save Review</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, setContentSaving, contentMessage, setContentMessage, API_URL, fetchAuth }) => {
   // ─── Local editing states ───
   // Hero Slides
@@ -3205,9 +3072,7 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   ];
 
   // FAQ Categories
-  const faqCategories = contentBlocks.faq_categories || [
-    { category: "Product Usage", questions: [{ question: "Can I use the Ultra Light Sunscreen SPF 50+ daily?", answer: "Yes, absolutely!" }] }
-  ];
+  const faqCategories = contentBlocks.faq_categories || defaultFaqs;
 
   // Our Story
   const ourStory = contentBlocks.our_story || {
@@ -3236,6 +3101,84 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   // Auth Poster
   const authPoster = contentBlocks.auth_poster || { image: "/images/combo.png", tagline: "Powerful Protection. Effective Gentle Care.", description: "Formulated in clinical labs to protect and cleanse your skin without compromise." };
 
+  const DEFAULT_POLICIES = {
+    privacy: `At Luscent Glow, your privacy is our priority. This Privacy Policy outlines how we collect, use, and protect your personal information when you visit or make a purchase from our website.
+
+**1. Information We Collect**
+We may collect personal information such as your name, email address, shipping address, and payment details when you place an order or sign up for our newsletter.
+
+**2. How We Use Your Information**
+Your information is used to process your orders, communicate with you about your purchase, and, with your permission, send you marketing updates. We do not sell or rent your personal information to third parties.
+
+**3. Data Security**
+We employ industry-standard security measures to ensure that your personal information is kept safe. All transactions are encrypted and processed securely.
+
+**4. Cookies**
+Our website uses cookies to enhance your browsing experience, remember your preferences, and analyze site traffic. You can choose to disable cookies through your browser settings, though this may affect your ability to use certain features of our site.
+
+**5. Changes to This Policy**
+We may update this privacy policy from time to time in order to reflect changes to our practices or for other operational, legal, or regulatory reasons.
+
+For any questions regarding our privacy practices, please contact us at theluscentglow@gmail.com.`,
+    terms: `Welcome to Luscent Glow. By accessing or using our website, you agree to be bound by the following terms and conditions. Please read them carefully before making a purchase.
+
+**1. General Conditions**
+We reserve the right to refuse service to anyone for any reason at any time. You understand that your content (not including credit card information), may be transferred unencrypted and involve transmissions over various networks.
+
+**2. Products and Services**
+Certain products or services may be available exclusively online through the website. These products or services may have limited quantities and are subject to return or exchange only according to our Refund Policy.
+
+**3. Accuracy of Billing and Account Information**
+We reserve the right to refuse any order you place with us. We may, in our sole discretion, limit or cancel quantities purchased per person, per household, or per order. 
+
+**4. Modifications to the Service and Prices**
+Prices for our products are subject to change without notice. We reserve the right at any time to modify or discontinue the Service (or any part or content thereof) without notice at any time.
+
+**5. Contact Information**
+Questions about the Terms of Service should be sent to us at theluscentglow@gmail.com.`,
+    refund: `Since our products are premium skincare formulations, strict hygiene and safety standards apply.
+
+**1. No Returns & No Refunds**
+- We do not offer returns or exchanges on any products once they have been purchased or shipped.
+- All sales are final. We do not issue refunds for change of mind or personal preference.
+
+**2. Damaged or Defective Items**
+- In the rare event that you receive a damaged, defective, or incorrect item, please notify us within 24 hours of delivery.
+- To report a damaged item, please email us at theluscentglow@gmail.com with your order number and clear photos/videos showing the damage.
+- Upon receiving your request, our team will evaluate the case. We reserve the right to decide on a case-by-case basis whether to offer a replacement, store credit, or other resolution.`,
+    shipping: `Here is everything you need to know about how we deliver Luscent Glow products to your doorstep.
+
+**1. Processing Time**
+All orders are processed within 1 to 2 business days (excluding weekends and holidays) after receiving your order confirmation email. You will receive another notification when your order has shipped.
+
+**2. Domestic Shipping Rates and Estimates**
+We offer standard shipping across India. Shipping charges for your order will be calculated and displayed at checkout. Free shipping is often available for orders above a certain value, as promoted on our website.
+
+**3. Delivery Time**
+Estimated delivery time is 3 to 7 business days, depending on your location. Please note that delivery times may be longer during public holidays or extreme weather conditions.
+
+**4. International Shipping**
+At this time, we only ship within India. We are working on expanding our delivery network globally in the near future.
+
+**5. Order Tracking**
+When your order has shipped, you will receive an email notification from us which will include a tracking number you can use to check its status. Please allow 24-48 hours for the tracking information to become available.
+
+If you haven’t received your order within 7 days of receiving your shipping confirmation email, please contact us at theluscentglow@gmail.com with your name and order number.`,
+    contact: `At Luscent Glow, we are committed to providing you with the best possible support and care.
+
+**1. Support Hours**
+- Our customer support team is available from Monday to Saturday, 10:00 AM to 6:00 PM (IST).
+- We aim to respond to all inquiries within 24 to 48 hours, excluding public holidays.
+
+**2. How to Reach Us**
+- **Email Support:** For any queries regarding orders, products, shipping, or returns, please email us at theluscentglow@gmail.com.
+- **Order Queries:** When reaching out about an order, please include your Order ID (e.g., #LUSCENT-1234) for faster assistance.
+
+**3. Address & Location**
+- For physical correspondence, please write to us at:
+  *Luscent Glow Support Team, Nadiad, Gujarat, India.*`
+  };
+
   // ─── Generic save helper ───
   const saveSection = async (sectionKey, content) => {
     setContentSaving(true);
@@ -3260,16 +3203,31 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     }
   };
 
+  const getFlatFaqs = (raw) => {
+    if (!Array.isArray(raw)) return [];
+    return raw.flatMap(item => {
+      if (item && item.questions && Array.isArray(item.questions)) {
+        return item.questions;
+      }
+      return item ? [item] : [];
+    });
+  };
+
   // ─── Local form states ───
   const [localHero, setLocalHero] = useState(heroSlides);
   const [localBanner, setLocalBanner] = useState(homepageBanner);
   const [localAnnouncement, setLocalAnnouncement] = useState(announcementBar);
   const [localTestimonials, setLocalTestimonials] = useState(testimonials);
-  const [localFAQ, setLocalFAQ] = useState(faqCategories);
+  const [localFAQ, setLocalFAQ] = useState(() => getFlatFaqs(faqCategories));
   const [localStory, setLocalStory] = useState(ourStory);
   const [localContact, setLocalContact] = useState(contactInfo);
   const [localAuthPoster, setLocalAuthPoster] = useState(authPoster);
   const [localBeforeAfter, setLocalBeforeAfter] = useState(contentBlocks.before_after || { beforeImage: "/before-skin.png", afterImage: "/after-skin.png" });
+  const [localPrivacy, setLocalPrivacy] = useState(contentBlocks.policy_privacy || DEFAULT_POLICIES.privacy);
+  const [localTerms, setLocalTerms] = useState(contentBlocks.policy_terms || DEFAULT_POLICIES.terms);
+  const [localRefund, setLocalRefund] = useState(contentBlocks.policy_refund || DEFAULT_POLICIES.refund);
+  const [localShipping, setLocalShipping] = useState(contentBlocks.policy_shipping || DEFAULT_POLICIES.shipping);
+  const [localContactSupport, setLocalContactSupport] = useState(contentBlocks.policy_contact || DEFAULT_POLICIES.contact);
   const [showStoryPreview, setShowStoryPreview] = useState(false);
   const [activeTab, setActiveTab] = useState("hero");
 
@@ -3277,11 +3235,12 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     { id: "hero", label: "Hero Carousel Slides" },
     { id: "banner", label: "Homepage Banner" },
     { id: "testimonials", label: "Testimonials" },
-    { id: "faq", label: "FAQ Categories" },
+    { id: "faq", label: "FAQ Questions" },
     { id: "story", label: "Our Story Page" },
     { id: "contact", label: "Contact Info" },
     { id: "auth", label: "Login / Signup Poster" },
     { id: "before_after", label: "Before & After Images" },
+    { id: "policies", label: "Legal Policies" },
   ];
 
   // Sync with parent when contentBlocks change
@@ -3290,11 +3249,22 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
     if (contentBlocks.homepage_banner) setLocalBanner(contentBlocks.homepage_banner);
     if (contentBlocks.announcement_bar) setLocalAnnouncement(contentBlocks.announcement_bar);
     if (contentBlocks.testimonials) setLocalTestimonials(contentBlocks.testimonials);
-    if (contentBlocks.faq_categories) setLocalFAQ(contentBlocks.faq_categories);
+    if (contentBlocks.faq_categories) setLocalFAQ(getFlatFaqs(contentBlocks.faq_categories));
+    else setLocalFAQ(getFlatFaqs(defaultFaqs));
     if (contentBlocks.our_story) setLocalStory(contentBlocks.our_story);
     if (contentBlocks.contact_info) setLocalContact(contentBlocks.contact_info);
     if (contentBlocks.auth_poster) setLocalAuthPoster(contentBlocks.auth_poster);
     if (contentBlocks.before_after) setLocalBeforeAfter(contentBlocks.before_after);
+    if (contentBlocks.policy_privacy) setLocalPrivacy(contentBlocks.policy_privacy);
+    else setLocalPrivacy(DEFAULT_POLICIES.privacy);
+    if (contentBlocks.policy_terms) setLocalTerms(contentBlocks.policy_terms);
+    else setLocalTerms(DEFAULT_POLICIES.terms);
+    if (contentBlocks.policy_refund) setLocalRefund(contentBlocks.policy_refund);
+    else setLocalRefund(DEFAULT_POLICIES.refund);
+    if (contentBlocks.policy_shipping) setLocalShipping(contentBlocks.policy_shipping);
+    else setLocalShipping(DEFAULT_POLICIES.shipping);
+    if (contentBlocks.policy_contact) setLocalContactSupport(contentBlocks.policy_contact);
+    else setLocalContactSupport(DEFAULT_POLICIES.contact);
   }, [contentBlocks]);
 
   // ─── Hero Slide Helpers ───
@@ -3316,28 +3286,11 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
   const removeTestimonial = (idx) => setLocalTestimonials(localTestimonials.filter((_, i) => i !== idx));
 
   // ─── FAQ Helpers ───
-  const addFAQCategory = () => setLocalFAQ([...localFAQ, { category: "", questions: [{ question: "", answer: "" }] }]);
-  const removeFAQCategory = (idx) => setLocalFAQ(localFAQ.filter((_, i) => i !== idx));
-  const updateFAQCategoryName = (idx, value) => {
+  const addFAQQuestion = () => setLocalFAQ([...localFAQ, { question: "", answer: "" }]);
+  const removeFAQQuestion = (idx) => setLocalFAQ(localFAQ.filter((_, i) => i !== idx));
+  const updateFAQQuestion = (idx, field, value) => {
     const copy = [...localFAQ];
-    copy[idx] = { ...copy[idx], category: value };
-    setLocalFAQ(copy);
-  };
-  const addFAQQuestion = (catIdx) => {
-    const copy = [...localFAQ];
-    copy[catIdx] = { ...copy[catIdx], questions: [...copy[catIdx].questions, { question: "", answer: "" }] };
-    setLocalFAQ(copy);
-  };
-  const removeFAQQuestion = (catIdx, qIdx) => {
-    const copy = [...localFAQ];
-    copy[catIdx] = { ...copy[catIdx], questions: copy[catIdx].questions.filter((_, i) => i !== qIdx) };
-    setLocalFAQ(copy);
-  };
-  const updateFAQQuestion = (catIdx, qIdx, field, value) => {
-    const copy = [...localFAQ];
-    const qCopy = [...copy[catIdx].questions];
-    qCopy[qIdx] = { ...qCopy[qIdx], [field]: value };
-    copy[catIdx] = { ...copy[catIdx], questions: qCopy };
+    copy[idx] = { ...copy[idx], [field]: value };
     setLocalFAQ(copy);
   };
 
@@ -3485,55 +3438,43 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
       </div>
       )}
 
-      {/* ═══════ 4. FAQ CATEGORIES ═══════ */}
+      {/* ═══════ 4. FAQ QUESTIONS ═══════ */}
       {activeTab === "faq" && (
         <div className={sectionCardClass}>
-        <div className={sectionTitleClass}>
-          <span>FAQ Categories ({localFAQ.length})</span>
-          <button onClick={addFAQCategory} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1">
-            <Plus size={12} /> Add Category
-          </button>
-        </div>
-        {localFAQ.map((cat, catIdx) => (
-          <div key={catIdx} className="p-4 bg-white border border-brand-card/30 rounded-xl space-y-3">
-            <div className="flex justify-between items-center">
-              <div className="flex-1 mr-3">
-                <label className={labelClass}>Category Name</label>
-                <input type="text" value={cat.category} onChange={(e) => updateFAQCategoryName(catIdx, e.target.value)} placeholder="e.g. Product Usage" className={inputClass} />
-              </div>
-              {localFAQ.length > 1 && (
-                <button onClick={() => removeFAQCategory(catIdx)} className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1.5 rounded transition mt-4">
-                  <Trash2 size={13} />
-                </button>
-              )}
-            </div>
-            <div className="ml-4 space-y-3 border-l-2 border-brand-card/30 pl-4">
-              {cat.questions.map((q, qIdx) => (
-                <div key={qIdx} className="space-y-2 p-3 bg-brand-bg/30 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-[9px] font-bold uppercase tracking-wider text-brand-grey">Q{qIdx + 1}</span>
-                    {cat.questions.length > 1 && (
-                      <button onClick={() => removeFAQQuestion(catIdx, qIdx)} className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1 rounded transition">
-                        <Trash2 size={11} />
-                      </button>
-                    )}
-                  </div>
-                  <div><label className={labelClass}>Question</label><input type="text" value={q.question} onChange={(e) => updateFAQQuestion(catIdx, qIdx, "question", e.target.value)} className={inputClass} /></div>
-                  <div><label className={labelClass}>Answer</label><textarea rows={2} value={q.answer} onChange={(e) => updateFAQQuestion(catIdx, qIdx, "answer", e.target.value)} className={inputClass + " resize-none"} /></div>
-                </div>
-              ))}
-              <button onClick={() => addFAQQuestion(catIdx)} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1 ml-1">
-                <Plus size={11} /> Add Question
-              </button>
-            </div>
+          <div className={sectionTitleClass}>
+            <span>FAQ Questions ({localFAQ.length})</span>
+            <button onClick={addFAQQuestion} className="text-[10px] uppercase tracking-wider font-bold text-brand-accent hover:text-brand-dark transition flex items-center gap-1">
+              <Plus size={12} /> Add Question
+            </button>
           </div>
-        ))}
-        <div className="flex justify-end">
-          <Button onClick={() => saveSection("faq_categories", localFAQ)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
-            {contentSaving ? "Saving..." : "Save FAQs"}
-          </Button>
+          <div className="space-y-4">
+            {localFAQ.map((q, idx) => (
+              <div key={idx} className="p-4 bg-white border border-brand-card/30 rounded-xl space-y-3 relative">
+                <div className="flex justify-between items-center">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-grey">Question {idx + 1}</span>
+                  {localFAQ.length > 1 && (
+                    <button onClick={() => removeFAQQuestion(idx)} className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1 rounded transition">
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>Question</label>
+                  <input type="text" value={q.question || ""} onChange={(e) => updateFAQQuestion(idx, "question", e.target.value)} className={inputClass} />
+                </div>
+                <div>
+                  <label className={labelClass}>Answer</label>
+                  <textarea rows={3} value={q.answer || ""} onChange={(e) => updateFAQQuestion(idx, "answer", e.target.value)} className={inputClass + " resize-none"} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={() => saveSection("faq_categories", localFAQ)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
+              {contentSaving ? "Saving..." : "Save FAQs"}
+            </Button>
+          </div>
         </div>
-      </div>
       )}
 
       {/* ═══════ 5. OUR STORY ═══════ */}
@@ -3694,6 +3635,66 @@ const ContentManagerTab = ({ contentBlocks, setContentBlocks, contentSaving, set
             <Button onClick={() => saveSection("before_after", localBeforeAfter)} disabled={contentSaving} className="py-2.5 px-6 bg-brand-dark text-white hover:bg-black font-bold text-xs uppercase tracking-wider rounded-xl">
               {contentSaving ? "Saving..." : "Save Images"}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ 9. LEGAL POLICIES ═══════ */}
+      {activeTab === "policies" && (
+        <div className={sectionCardClass}>
+          <h4 className={sectionTitleClass}>Legal Policies Content</h4>
+          <p className="text-xs text-brand-grey mb-4">Edit the markdown content of your legal policy pages. Double asterisks (e.g. **Heading**) will render bold headers.</p>
+          
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label className={labelClass}>Privacy Policy</label>
+              <textarea rows={6} value={localPrivacy} onChange={(e) => setLocalPrivacy(e.target.value)} className={inputClass} placeholder="Privacy policy content..." />
+              <div className="flex justify-end">
+                <Button onClick={() => saveSection("policy_privacy", localPrivacy)} disabled={contentSaving} className="py-2 px-4 bg-brand-dark text-white hover:bg-black font-bold text-[10px] uppercase tracking-wider rounded-xl">
+                  {contentSaving ? "Saving..." : "Save Privacy Policy"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-brand-card/30 pt-6 space-y-2">
+              <label className={labelClass}>Terms of Service</label>
+              <textarea rows={6} value={localTerms} onChange={(e) => setLocalTerms(e.target.value)} className={inputClass} placeholder="Terms of service content..." />
+              <div className="flex justify-end">
+                <Button onClick={() => saveSection("policy_terms", localTerms)} disabled={contentSaving} className="py-2 px-4 bg-brand-dark text-white hover:bg-black font-bold text-[10px] uppercase tracking-wider rounded-xl">
+                  {contentSaving ? "Saving..." : "Save Terms of Service"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-brand-card/30 pt-6 space-y-2">
+              <label className={labelClass}>Refund & Return Policy</label>
+              <textarea rows={6} value={localRefund} onChange={(e) => setLocalRefund(e.target.value)} className={inputClass} placeholder="Refund & return policy content..." />
+              <div className="flex justify-end">
+                <Button onClick={() => saveSection("policy_refund", localRefund)} disabled={contentSaving} className="py-2 px-4 bg-brand-dark text-white hover:bg-black font-bold text-[10px] uppercase tracking-wider rounded-xl">
+                  {contentSaving ? "Saving..." : "Save Refund & Return Policy"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-brand-card/30 pt-6 space-y-2">
+              <label className={labelClass}>Shipping Policy</label>
+              <textarea rows={6} value={localShipping} onChange={(e) => setLocalShipping(e.target.value)} className={inputClass} placeholder="Shipping policy content..." />
+              <div className="flex justify-end">
+                <Button onClick={() => saveSection("policy_shipping", localShipping)} disabled={contentSaving} className="py-2 px-4 bg-brand-dark text-white hover:bg-black font-bold text-[10px] uppercase tracking-wider rounded-xl">
+                  {contentSaving ? "Saving..." : "Save Shipping Policy"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="border-t border-brand-card/30 pt-6 space-y-2">
+              <label className={labelClass}>Contact & Customer Support Policy</label>
+              <textarea rows={6} value={localContactSupport} onChange={(e) => setLocalContactSupport(e.target.value)} className={inputClass} placeholder="Contact & Support policy content..." />
+              <div className="flex justify-end">
+                <Button onClick={() => saveSection("policy_contact", localContactSupport)} disabled={contentSaving} className="py-2 px-4 bg-brand-dark text-white hover:bg-black font-bold text-[10px] uppercase tracking-wider rounded-xl">
+                  {contentSaving ? "Saving..." : "Save Contact & Support Policy"}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       )}

@@ -22,21 +22,30 @@ export const FAQPage = () => {
       .finally(() => setLoading(false));
   }, []);
 
+  // Flatten faqList if it's in the grouped format
+  const allQuestions = React.useMemo(() => {
+    if (!Array.isArray(faqList)) return [];
+    return faqList.flatMap(item => {
+      if (item && item.questions && Array.isArray(item.questions)) {
+        return item.questions;
+      }
+      return item ? [item] : [];
+    });
+  }, [faqList]);
+
+  // Filter based on search term
+  const filteredQuestions = React.useMemo(() => {
+    return allQuestions.filter(
+      q => q && q.question && (
+        q.question.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (q.answer && q.answer.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    );
+  }, [allQuestions, searchTerm]);
+
   if (loading) {
     return <Loader text="Loading FAQs..." />;
   }
-
-  // Filter FAQs based on search
-  const filteredFaqs = faqList.map(cat => {
-    const filteredQuestions = cat.questions ? cat.questions.filter(
-      q => q.question.toLowerCase().includes(searchTerm.toLowerCase()) || 
-           q.answer.toLowerCase().includes(searchTerm.toLowerCase())
-    ) : [];
-    return {
-      ...cat,
-      questions: filteredQuestions
-    };
-  }).filter(cat => cat.questions && cat.questions.length > 0);
 
   return (
     <div className="pt-24 pb-16 px-6 max-w-4xl mx-auto space-y-12">
@@ -58,32 +67,25 @@ export const FAQPage = () => {
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-grey/60">
               <Search size={16} />
             </span>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search questions or ingredients..."
-            className="w-full pl-11 pr-4 py-3 bg-white border border-brand-card rounded-full text-xs focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark transition-all"
-          />
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search questions or ingredients..."
+              className="w-full pl-11 pr-4 py-3 bg-white border border-brand-card rounded-full text-xs focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark transition-all"
+            />
           </div>
         </div>
       </section>
 
-      {/* Grouped Accordions list */}
+      {/* Accordions list */}
       <div className="space-y-10 text-left">
-        {filteredFaqs.length === 0 ? (
+        {filteredQuestions.length === 0 ? (
           <div className="text-center py-10 text-brand-grey text-xs">
             No questions match "{searchTerm}". Try searching for "sunscreen" or "shipping".
           </div>
         ) : (
-          filteredFaqs.map((cat, idx) => (
-            <div key={idx} className="space-y-4">
-              <h2 className="font-serif text-lg font-semibold text-brand-dark border-b border-brand-card/50 pb-2 flex items-center gap-2">
-                <HelpCircle size={16} className="text-brand-accent" /> {cat.category}
-              </h2>
-              <FAQAccordion items={cat.questions} />
-            </div>
-          ))
+          <FAQAccordion items={filteredQuestions} />
         )}
       </div>
     </div>

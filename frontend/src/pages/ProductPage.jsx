@@ -401,7 +401,7 @@ export const ProductPage = () => {
                   {rev.title && (
                     <strong className="text-brand-dark text-xs block truncate">{rev.title}</strong>
                   )}
-                  <p className="text-brand-grey text-[11px] leading-tight line-clamp-2 mt-0.5">{rev.comment}</p>
+                  <p className="text-brand-grey text-[11px] leading-tight mt-0.5">{rev.comment}</p>
                   {rev.images && rev.images.length > 0 && (
                     <div className="flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
                       {rev.images.map((img, i) => (

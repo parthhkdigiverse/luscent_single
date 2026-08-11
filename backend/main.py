@@ -1283,12 +1283,6 @@ async def admin_update_review(review_id: str, review: dict, current_admin: dict 
         raise HTTPException(status_code=404, detail="Review not found")
     return updated
 
-@app.delete("/api/admin/reviews/{review_id}")
-async def admin_delete_review(review_id: str, current_admin: dict = Depends(get_admin_user)):
-    result = await reviews_collection.delete_one({"_id": ObjectId(review_id)})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Review not found")
-    return {"message": "Review deleted successfully"}
 
 # --- Inventory Routes ---
 @app.get("/api/admin/inventory", response_model=List[InventoryResponse])
@@ -1537,13 +1531,13 @@ async def update_review(review_id: str, review_in: ReviewUpdate, current_user: d
                 
     return updated_review
 
-@app.delete("/api/admin/reviews/{review_id}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/api/admin/reviews/{review_id}")
 async def delete_review(review_id: str, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
     try:
         obj_id = ObjectId(review_id)
     except:
-        raise HTTPException(status_code=400, detail="Invalid review ID")
+        obj_id = review_id
         
     # Get the product_id before deleting so we can update the average rating
     review = await reviews_collection.find_one({"_id": obj_id})

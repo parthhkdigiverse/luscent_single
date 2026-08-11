@@ -1081,21 +1081,48 @@ export const ProfilePage = () => {
                           accept="image/*"
                           className="hidden"
                           multiple
-                          onChange={(e) => {
+                          onChange={async (e) => {
                             const files = Array.from(e.target.files);
                             const allowed = 3 - reviewImages.length;
                             const toProcess = files.slice(0, allowed);
-                            toProcess.forEach(file => {
-                              if (file.size > 2 * 1024 * 1024) {
-                                alert("Each image must be less than 2MB.");
-                                return;
+                            for (const file of toProcess) {
+                              if (file.size > 15 * 1024 * 1024) {
+                                alert(`File ${file.name} is larger than 15MB`);
+                                continue;
                               }
-                              const reader = new FileReader();
-                              reader.onloadend = () => {
-                                setReviewImages(prev => [...prev, reader.result]);
-                              };
-                              reader.readAsDataURL(file);
-                            });
+                              // Compress image using canvas
+                              const compressed = await new Promise((resolve) => {
+                                const reader = new FileReader();
+                                reader.onload = (event) => {
+                                  const img = new Image();
+                                  img.onload = () => {
+                                    const canvas = document.createElement("canvas");
+                                    let width = img.width;
+                                    let height = img.height;
+                                    const MAX_DIM = 1000;
+                                    if (width > height) {
+                                      if (width > MAX_DIM) {
+                                        height *= MAX_DIM / width;
+                                        width = MAX_DIM;
+                                      }
+                                    } else {
+                                      if (height > MAX_DIM) {
+                                        width *= MAX_DIM / height;
+                                        height = MAX_DIM;
+                                      }
+                                    }
+                                    canvas.width = width;
+                                    canvas.height = height;
+                                    const ctx = canvas.getContext("2d");
+                                    ctx.drawImage(img, 0, 0, width, height);
+                                    resolve(canvas.toDataURL("image/jpeg", 0.7));
+                                  };
+                                  img.src = event.target.result;
+                                };
+                                reader.readAsDataURL(file);
+                              });
+                              setReviewImages(prev => [...prev, compressed]);
+                            }
                           }}
                         />
                       </label>

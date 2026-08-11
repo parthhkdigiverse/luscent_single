@@ -1,5 +1,6 @@
 import React from "react";
 import { useParams, Navigate, Link } from "react-router-dom";
+import { API_URL } from "../config";
 
 const policies = {
   "privacy-policy": {
@@ -106,7 +107,45 @@ If you haven’t received your order within 7 days of receiving your shipping co
 
 export const PolicyPage = () => {
   const { policyId } = useParams();
-  const policy = policies[policyId];
+  const [dynamicPolicies, setDynamicPolicies] = React.useState(policies);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const fetchPolicies = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/content`);
+        if (res.ok) {
+          const data = await res.json();
+          const updated = { ...policies };
+          
+          // Deep clone policies so we don't mutate static state
+          updated["privacy-policy"] = { ...policies["privacy-policy"] };
+          updated["terms-of-service"] = { ...policies["terms-of-service"] };
+          updated["refund-policy"] = { ...policies["refund-policy"] };
+          updated["shipping-policy"] = { ...policies["shipping-policy"] };
+          updated["contact-support"] = { ...policies["contact-support"] };
+
+          if (data.policy_privacy) updated["privacy-policy"].content = data.policy_privacy;
+          if (data.policy_terms) updated["terms-of-service"].content = data.policy_terms;
+          if (data.policy_refund) updated["refund-policy"].content = data.policy_refund;
+          if (data.policy_shipping) updated["shipping-policy"].content = data.policy_shipping;
+          if (data.policy_contact) updated["contact-support"].content = data.policy_contact;
+          setDynamicPolicies(updated);
+        }
+      } catch (err) {
+        console.error("Failed to load dynamic policies:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPolicies();
+  }, []);
+
+  const policy = dynamicPolicies[policyId];
+
+  if (loading) {
+    return <div className="py-32 text-center text-brand-grey text-sm">Loading Policy...</div>;
+  }
 
   if (!policy) {
     return <Navigate to="/" replace />;
