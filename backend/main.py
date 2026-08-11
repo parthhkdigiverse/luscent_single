@@ -1248,10 +1248,13 @@ async def admin_create_review(review: dict, current_admin: dict = Depends(get_ad
     new_review = {
         "product_id": review.get("product_id"),
         "order_id": review.get("order_id", "admin_added"),
-        "user_name": review.get("user_name", "Anonymous"),
+        "user_name": review.get("user_name") or review.get("name", "Anonymous"),
+        "name": review.get("name") or review.get("user_name", "Anonymous"),
         "user_email": review.get("user_email", "admin@luscentglow.com"),
         "rating": review.get("rating", 5),
+        "title": review.get("title", ""),
         "comment": review.get("comment", ""),
+        "images": review.get("images", []),
         "created_at": datetime.now(timezone.utc)
     }
     result = await reviews_collection.insert_one(new_review)
@@ -1263,7 +1266,14 @@ async def admin_update_review(review_id: str, review: dict, current_admin: dict 
     update_data = {}
     if "rating" in review: update_data["rating"] = review["rating"]
     if "comment" in review: update_data["comment"] = review["comment"]
-    if "user_name" in review: update_data["user_name"] = review["user_name"]
+    if "user_name" in review:
+        update_data["user_name"] = review["user_name"]
+        update_data["name"] = review["user_name"]
+    if "name" in review:
+        update_data["name"] = review["name"]
+        update_data["user_name"] = review["name"]
+    if "title" in review: update_data["title"] = review["title"]
+    if "images" in review: update_data["images"] = review["images"]
     
     if update_data:
         await reviews_collection.update_one({"_id": ObjectId(review_id)}, {"$set": update_data})
@@ -1424,12 +1434,41 @@ async def subscribe_newsletter(req: SubscribeRequest):
 async def create_review(review_in: ReviewCreate, current_user: dict = Depends(get_current_user_optional)):
     review_dict = review_in.dict()
     review_dict["created_at"] = datetime.now(timezone.utc)
+    
+    existing = None
     if current_user:
         review_dict["user_id"] = str(current_user["_id"])
-    result = await reviews_collection.insert_one(review_dict)
-    
+        review_dict["user_email"] = current_user.get("email")
+        existing = await reviews_collection.find_one({
+            "product_id": review_in.product_id,
+            "$or": [
+                {"user_id": str(current_user["_id"])},
+                {"user_email": current_user.get("email")}
+            ]
+        })
+        
+    if existing:
+        # Update existing review
+        await reviews_collection.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {
+                "rating": review_in.rating,
+                "title": review_in.title,
+                "comment": review_in.comment,
+                "images": review_in.images or [],
+                "name": review_in.name or existing.get("name", "Customer"),
+                "user_name": review_in.name or existing.get("user_name", "Customer"),
+                "created_at": datetime.now(timezone.utc)
+            }}
+        )
+        updated_review = await reviews_collection.find_one({"_id": existing["_id"]})
+    else:
+        # Insert new review
+        result = await reviews_collection.insert_one(review_dict)
+        review_dict["_id"] = result.inserted_id
+        updated_review = review_dict
+
     # Update average rating and reviews count on the product
-    # Note: We aggregate reviews to get the new average
     cursor = reviews_collection.find({"product_id": review_in.product_id})
     reviews = []
     async for doc in cursor:
@@ -1441,9 +1480,8 @@ async def create_review(review_in: ReviewCreate, current_user: dict = Depends(ge
             {"id": review_in.product_id},
             {"$set": {"rating": avg_rating}}
         )
-    
-    review_dict["_id"] = result.inserted_id
-    return review_dict
+        
+    return updated_review
 
 @app.get("/api/reviews/product/{product_id}", response_model=List[ReviewResponse])
 async def get_product_reviews(product_id: str):

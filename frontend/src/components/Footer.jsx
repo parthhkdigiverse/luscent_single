@@ -172,8 +172,9 @@ export const Footer = () => {
         <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 text-center">
           <Link to="/policies/privacy-policy" className="hover:text-brand-accent transition-colors">Privacy Policy</Link>
           <Link to="/policies/terms-of-service" className="hover:text-brand-accent transition-colors">Terms of Service</Link>
-          <Link to="/policies/refund-policy" className="hover:text-brand-accent transition-colors">Refund Policy</Link>
+          <Link to="/policies/refund-policy" className="hover:text-brand-accent transition-colors">Refund & Return Policy</Link>
           <Link to="/policies/shipping-policy" className="hover:text-brand-accent transition-colors">Shipping Policy</Link>
+          <Link to="/policies/contact-support" className="hover:text-brand-accent transition-colors">Contact & Support</Link>
         </div>
 
         <div className="flex flex-col items-center sm:items-end gap-2">

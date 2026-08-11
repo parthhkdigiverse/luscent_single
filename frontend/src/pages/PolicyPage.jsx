@@ -49,21 +49,34 @@ Questions about the Terms of Service should be sent to us at theluscentglow@gmai
   "refund-policy": {
     title: "Refund & Return Policy",
     content: `
-We want you to be completely satisfied with your Luscent Glow purchase. Since our products are skincare formulations, strict hygiene and safety standards apply.
+Since our products are premium skincare formulations, strict hygiene and safety standards apply.
 
-**1. Return Eligibility**
-- We accept returns only for products that are damaged in transit or if you receive an incorrect item.
-- To be eligible for a return, your item must be unused, sealed, and in the same condition that you received it. It must also be in the original packaging.
-- Requests for returns must be made within 7 days of receiving your order.
+**1. No Returns & No Refunds**
+- We do not offer returns or exchanges on any products once they have been purchased or shipped.
+- All sales are final. We do not issue refunds for change of mind or personal preference.
 
-**2. Non-Returnable Items**
-Due to hygiene reasons, opened or used skincare products cannot be returned or refunded unless there is a proven manufacturing defect.
+**2. Damaged or Defective Items**
+- In the rare event that you receive a damaged, defective, or incorrect item, please notify us within 24 hours of delivery.
+- To report a damaged item, please email us at theluscentglow@gmail.com with your order number and clear photos/videos showing the damage.
+- Upon receiving your request, our team will evaluate the case. We reserve the right to decide on a case-by-case basis whether to offer a replacement, store credit, or other resolution.
+    `
+  },
+  "contact-support": {
+    title: "Contact & Customer Support Policy",
+    content: `
+At Luscent Glow, we are committed to providing you with the best possible support and care.
 
-**3. Process for Returns**
-To initiate a return, please email us at theluscentglow@gmail.com with your order number and photos of the damaged or incorrect item. We will provide you with instructions on how and where to send your package.
+**1. Support Hours**
+- Our customer support team is available from Monday to Saturday, 10:00 AM to 6:00 PM (IST).
+- We aim to respond to all inquiries within 24 to 48 hours, excluding public holidays.
 
-**4. Refunds**
-Once your return is received and inspected, we will send you an email to notify you that we have received your returned item. If approved, your refund will be processed, and a credit will automatically be applied to your credit card or original method of payment, within 5-7 business days.
+**2. How to Reach Us**
+- **Email Support:** For any queries regarding orders, products, shipping, or returns, please email us at theluscentglow@gmail.com.
+- **Order Queries:** When reaching out about an order, please include your Order ID (e.g., #LUSCENT-1234) for faster assistance.
+
+**3. Address & Location**
+- For physical correspondence, please write to us at:
+  *Luscent Glow Support Team, Nadiad, Gujarat, India.*
     `
   },
   "shipping-policy": {

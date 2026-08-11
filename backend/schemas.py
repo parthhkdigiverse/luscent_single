@@ -292,6 +292,7 @@ class ReviewCreate(BaseModel):
     rating: int  # 1 to 5
     title: str
     comment: str
+    images: Optional[List[str]] = []
 
 class ReviewUpdate(BaseModel):
     product_id: Optional[str] = None
@@ -299,10 +300,14 @@ class ReviewUpdate(BaseModel):
     rating: Optional[int] = None
     title: Optional[str] = None
     comment: Optional[str] = None
+    images: Optional[List[str]] = None
 
 class ReviewResponse(ReviewCreate):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     user_id: Optional[str] = None
+    order_id: Optional[str] = "direct"
+    user_name: Optional[str] = "Customer"
+    user_email: Optional[str] = ""
     created_at: datetime
 
     class Config:
