@@ -46,6 +46,7 @@ export const AdminPage = () => {
   const [inquiriesList, setInquiriesList] = useState([]);
   const [showDeletedUsers, setShowDeletedUsers] = useState(false);
   const [couponsList, setCouponsList] = useState([]);
+  const [returnsList, setReturnsList] = useState([]);
 
   // Coupon Dialog State
   const [showCouponModal, setShowCouponModal] = useState(false);
@@ -411,6 +412,13 @@ export const AdminPage = () => {
       if (reviewsRes.ok) {
         const reviewsData = await reviewsRes.json();
         setReviewsList(reviewsData);
+      }
+
+      // Returns
+      const returnsRes = await fetchAuth(`${API_URL}/api/admin/returns`);
+      if (returnsRes.ok) {
+        const returnsData = await returnsRes.json();
+        setReturnsList(returnsData);
       }
     } catch (err) {
       setError("Failed to fetch dashboard data. Please try again.");
@@ -981,6 +989,7 @@ export const AdminPage = () => {
             <NavItem id="coupons" label="Coupons" icon={Ticket} />
             <NavItem id="payments" label="Payments" icon={CreditCard} />
             <NavItem id="reports" label="Reports" icon={BarChart3} />
+            <NavItem id="returns" label="Returns & Refunds" icon={RotateCcw} />
             <NavItem id="reviews" label="Reviews" icon={Star} />
             <NavItem id="inquiries" label="Inquiries" icon={MessageSquare} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
@@ -1546,7 +1555,8 @@ export const AdminPage = () => {
                 orders={orders} 
                 productsList={productsList} 
                 inventoryList={inventoryList} 
-                usersList={usersList} 
+                usersList={usersList}
+                returnsList={returnsList}
               />
             )}
 
@@ -2124,6 +2134,15 @@ export const AdminPage = () => {
                 setContentMessage={setContentMessage}
                 API_URL={API_URL}
                 fetchAuth={fetchAuth}
+              />
+            )}
+
+            {activeTab === "returns" && (
+              <ReturnsTab 
+                returnsList={returnsList} 
+                fetchDashboardData={fetchDashboardData} 
+                API_URL={API_URL} 
+                fetchAuth={fetchAuth} 
               />
             )}
 
@@ -4179,7 +4198,7 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
     return sum + items.reduce((itemSum, item) => itemSum + (item.quantity || 1), 0);
   }, 0);
 
-  const StatCard = ({ title, value, icon: Icon, trendStr, isPositive, hideTrend = false }) => (
+  const StatCard = ({ title, value, icon: Icon, trendStr, isPositive, hideTrend = true }) => (
     <div className="bg-white border border-brand-card/60 p-5 rounded-2xl shadow-sm flex flex-col justify-between min-h-[120px]">
       <div className="flex justify-between items-start mb-4">
         <h4 className="text-[10px] font-bold text-brand-grey uppercase tracking-wider">{title}</h4>
@@ -4234,7 +4253,7 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
   );
 };
 
-const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
+const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsList }) => {
 
   const downloadCSV = (filename, data, headers) => {
     let csv = headers.join(",") + "\n";
@@ -4390,6 +4409,32 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
           ];
         });
         break;
+      case "returns":
+        title = "Return Report";
+        headers = ["Return ID", "Order ID", "Date", "Customer Name", "Product", "Reason", "Stage", "Refund Amount"];
+        data = (returnsList || []).map(r => [
+          r.return_id || "N/A",
+          r.order_number || "N/A",
+          r.created_at ? new Date(r.created_at).toLocaleDateString() : "N/A",
+          r.customer_name || "N/A",
+          r.product_name || "N/A",
+          r.reason || "N/A",
+          r.stage || "N/A",
+          r.amount || 0
+        ]);
+        break;
+      case "refund":
+        title = "Refund Report";
+        headers = ["Return ID", "Order ID", "Date", "Customer Name", "Product", "Refund Amount"];
+        data = (returnsList || []).filter(r => r.stage === "Refund Completed").map(r => [
+          r.return_id || "N/A",
+          r.order_number || "N/A",
+          r.created_at ? new Date(r.created_at).toLocaleDateString() : "N/A",
+          r.customer_name || "N/A",
+          r.product_name || "N/A",
+          r.amount || 0
+        ]);
+        break;
     }
     
     return { title, headers, data };
@@ -4450,6 +4495,8 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
         <ReportCard id="online" title="Online Payment Report" desc="Razorpay success rate & fees" icon={CreditCard} />
         <ReportCard id="cancelled" title="Cancelled Report" desc="Cancellations by reason & stage" icon={XCircle} />
         <ReportCard id="inventory" title="Inventory Report" desc="Stock, aging and damaged inventory" icon={Boxes} />
+        <ReportCard id="returns" title="Return Report" desc="Returns, reasons and rate" icon={RotateCcw} />
+        <ReportCard id="refund" title="Refund Report" desc="Refund velocity by channel" icon={Wallet} />
       </div>
 
       <AnimatePresence>
@@ -4513,6 +4560,122 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList }) => {
           );
         })()}
       </AnimatePresence>
+    </div>
+  );
+};
+
+const ReturnsTab = ({ returnsList, fetchDashboardData, API_URL, fetchAuth }) => {
+  const [activeSubTab, setActiveSubTab] = useState("returns");
+  
+  const handleUpdateStage = async (returnId, newStage) => {
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/returns/${returnId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: newStage })
+      });
+      if (res.ok) fetchDashboardData();
+      else alert("Failed to update return stage");
+    } catch (e) {
+      alert("Error updating return");
+    }
+  };
+
+  const refundsList = returnsList.filter(r => r.stage === "Refund Completed");
+  const activeList = activeSubTab === "returns" ? returnsList : refundsList;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="font-serif text-3xl font-bold text-brand-dark tracking-tight">Returns & Refunds</h2>
+        <p className="text-sm text-brand-grey mt-1.5">Track every return through quality check to refund.</p>
+      </div>
+
+      <div className="bg-white border border-brand-card/40 rounded-3xl p-6 shadow-sm">
+        <h4 className="font-semibold text-brand-dark mb-4">Workflow</h4>
+        <div className="flex flex-col md:flex-row gap-4 items-center justify-between relative">
+          <div className="absolute top-1/2 left-0 w-full h-[2px] bg-brand-card/30 hidden md:block -z-0"></div>
+          
+          {["Return Request", "Product Received", "Quality Check", "Refund Completed"].map((stage, idx) => (
+            <div key={stage} className="w-full md:flex-1 bg-white border border-brand-card/60 rounded-xl p-4 flex items-center gap-3 relative z-10 hover:border-brand-dark/30 transition-colors">
+              <span className="text-[10px] font-bold text-brand-grey uppercase tracking-wider">{String(idx + 1).padStart(2, '0')}</span>
+              <span className="text-sm font-semibold text-brand-dark">{stage}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <button 
+          onClick={() => setActiveSubTab("returns")}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${activeSubTab === "returns" ? "bg-white border border-brand-card/60 text-brand-dark shadow-sm" : "bg-transparent text-brand-grey hover:bg-brand-card/30"}`}
+        >
+          Returns ({returnsList.length})
+        </button>
+        <button 
+          onClick={() => setActiveSubTab("refunds")}
+          className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${activeSubTab === "refunds" ? "bg-white border border-brand-card/60 text-brand-dark shadow-sm" : "bg-transparent text-brand-grey hover:bg-brand-card/30"}`}
+        >
+          Refunds ({refundsList.length})
+        </button>
+      </div>
+
+      <div className="bg-white border border-brand-card/40 rounded-3xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left whitespace-nowrap">
+            <thead className="bg-[#FAF8F5] border-b border-brand-card/40">
+              <tr>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">RETURN ID</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">ORDER</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">CUSTOMER</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">PRODUCT</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">REASON</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">STAGE</th>
+                <th className="p-4 text-[10px] font-bold text-brand-grey uppercase tracking-wider">AMOUNT</th>
+                <th className="p-4"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-card/20">
+              {activeList.map(ret => (
+                <tr key={ret.return_id} className="hover:bg-brand-bg/30">
+                  <td className="p-4 text-xs font-semibold text-brand-dark">{ret.return_id}</td>
+                  <td className="p-4 text-xs font-semibold text-brand-dark">{ret.order_number}</td>
+                  <td className="p-4 text-xs font-bold text-brand-dark">{ret.customer_name}</td>
+                  <td className="p-4 text-xs text-brand-grey">{ret.product_name}</td>
+                  <td className="p-4 text-xs text-brand-grey">{ret.reason}</td>
+                  <td className="p-4">
+                    <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#FFF2E5] text-[#C9701A] border border-[#FFD9B3]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span> {ret.stage}
+                    </span>
+                  </td>
+                  <td className="p-4 text-xs font-bold text-brand-dark">₹{ret.amount}</td>
+                  <td className="p-4 text-right">
+                    <button 
+                      onClick={() => {
+                        const stages = ["Return Request", "Product Received", "Quality Check", "Refund Completed"];
+                        const nextStage = stages[stages.indexOf(ret.stage) + 1];
+                        if (nextStage && window.confirm(`Move ${ret.return_id} to ${nextStage}?`)) {
+                          handleUpdateStage(ret.id || ret._id, nextStage);
+                        } else if (!nextStage) {
+                          alert("This return has already reached the final stage.");
+                        }
+                      }}
+                      className="text-[10px] font-bold text-brand-dark hover:text-black uppercase tracking-wider transition-colors"
+                    >
+                      Review
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {activeList.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="p-10 text-center text-sm text-brand-grey">No records found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 };

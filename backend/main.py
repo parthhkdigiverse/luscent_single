@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
@@ -29,6 +29,7 @@ from schemas import (
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
     ReviewCreate, ReviewUpdate, ReviewResponse
 )
+import schemas
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
 
 env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env')
@@ -1545,6 +1546,48 @@ async def delete_review(review_id: str, current_user: dict = Depends(get_admin_u
         )
         
     return {"message": "Review deleted"}
+
+# --- Returns & Refunds ---
+@app.get("/api/admin/returns", response_model=List[schemas.ReturnResponse])
+async def get_returns(current_user: dict = Depends(get_admin_user)):
+    cursor = returns_collection.find()
+    returns = []
+    async for doc in cursor:
+        doc["id"] = str(doc["_id"])
+        returns.append(doc)
+    return returns
+
+@app.post("/api/admin/returns", response_model=schemas.ReturnResponse)
+async def create_return(return_data: schemas.ReturnCreate, current_user: dict = Depends(get_admin_user)):
+    return_dict = return_data.dict()
+    return_dict["created_at"] = datetime.utcnow()
+    
+    result = await returns_collection.insert_one(return_dict)
+    return_dict["id"] = str(result.inserted_id)
+    return return_dict
+
+@app.put("/api/admin/returns/{return_id}")
+async def update_return_status(return_id: str, return_update: schemas.ReturnUpdate, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(return_id)
+    except:
+        obj_id = return_id
+
+    update_data = {k: v for k, v in return_update.dict(exclude_unset=True).items() if v is not None}
+    
+    if not update_data:
+        return {"message": "No fields to update"}
+        
+    result = await returns_collection.update_one(
+        {"_id": obj_id},
+        {"$set": update_data}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Return record not found")
+        
+    return {"message": "Return record updated successfully"}
 
 # --- Serve Frontend ---
 dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")

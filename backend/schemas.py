@@ -313,3 +313,29 @@ class ReviewResponse(ReviewCreate):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+# Return Schemas
+class ReturnBase(BaseModel):
+    return_id: str
+    order_number: str
+    customer_name: str
+    product_name: str
+    reason: str
+    stage: str = "Return Request"
+    amount: float
+
+class ReturnCreate(ReturnBase):
+    pass
+
+class ReturnUpdate(BaseModel):
+    stage: Optional[str] = None
+    reason: Optional[str] = None
+    amount: Optional[float] = None
+
+class ReturnResponse(ReturnBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
