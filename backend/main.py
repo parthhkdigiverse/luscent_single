@@ -9,6 +9,7 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 from pydantic import BaseModel
+from bson import ObjectId
 
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -1395,17 +1396,79 @@ async def get_delhivery_label(order_id: str):
         return {"url": f"https://mock-delhivery.com/label/{awb}.pdf"}
         
     delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    errors = []
+
+    # Try fetching the PDF label URL (GET v2)
+    label_url = f"https://track.delhivery.com/v2/get-label-urls/a4/{awb}" if delhivery_env == "production" else f"https://staging-express.delhivery.com/v2/get-label-urls/a4/{awb}"
+    try:
+        async with httpx.AsyncClient() as client:
+            res_pdf = await client.get(label_url, headers={"Authorization": f"Token {delhivery_token}"})
+            if res_pdf.status_code == 200:
+                pdf_data = res_pdf.json()
+                if "data" in pdf_data and "labels" in pdf_data["data"] and len(pdf_data["data"]["labels"]) > 0:
+                    label_link = pdf_data["data"]["labels"][0].get("url")
+                    if label_link: return {"url": label_link}
+                if "label_url" in pdf_data: return {"url": pdf_data["label_url"]}
+                if "url" in pdf_data: return {"url": pdf_data["url"]}
+            else:
+                errors.append(f"GET /v2/get-label-urls: {res_pdf.status_code} {res_pdf.text}")
+    except Exception as e:
+        errors.append(f"GET /v2/get-label-urls error: {str(e)}")
+
+    # Try generating PDF via POST (docket/generate_label_pdf) with 'lrn' array
+    gen_pdf_url = f"https://track.delhivery.com/docket/generate_label_pdf" if delhivery_env == "production" else f"https://staging-express.delhivery.com/docket/generate_label_pdf"
+    try:
+        async with httpx.AsyncClient() as client:
+            res_gen = await client.post(gen_pdf_url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json={"lrn": [awb]})
+            if res_gen.status_code == 200:
+                gen_data = res_gen.json()
+                if gen_data.get("download_url"): return {"url": gen_data["download_url"]}
+                if gen_data.get("url"): return {"url": gen_data["url"]}
+                if gen_data.get("data", {}).get("pdf_url"): return {"url": gen_data["data"]["pdf_url"]}
+            else:
+                errors.append(f"POST /docket/generate_label_pdf (lrn): {res_gen.status_code} {res_gen.text}")
+    except Exception as e:
+        errors.append(f"POST /docket/generate_label_pdf error: {str(e)}")
+        
+    # Try getting PDF directly from packing slip (format=pdf)
+    url_pdf = f"https://track.delhivery.com/api/p/packing_slip?wbns={awb}&format=pdf" if delhivery_env == "production" else f"https://staging-express.delhivery.com/api/p/packing_slip?wbns={awb}&format=pdf"
+    url_pdf_true = f"https://track.delhivery.com/api/p/packing_slip?wbns={awb}&pdf=True" if delhivery_env == "production" else f"https://staging-express.delhivery.com/api/p/packing_slip?wbns={awb}&pdf=True"
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. Try format=pdf
+            res_pdf2 = await client.get(url_pdf, headers={"Authorization": f"Token {delhivery_token}", "Accept": "application/pdf"})
+            if res_pdf2.status_code == 200 and "application/pdf" in res_pdf2.headers.get("content-type", ""):
+                return {"url": url_pdf}
+            
+            # 2. Try pdf=True
+            res_pdf3 = await client.get(url_pdf_true, headers={"Authorization": f"Token {delhivery_token}", "Accept": "application/pdf"})
+            if res_pdf3.status_code == 200 and "application/pdf" in res_pdf3.headers.get("content-type", ""):
+                return {"url": url_pdf_true}
+            elif res_pdf3.status_code == 200:
+                json_data = res_pdf3.json()
+                if "packages" in json_data and len(json_data["packages"]) > 0 and json_data["packages"][0].get("pdf_download_link"):
+                    return {"url": json_data["packages"][0]["pdf_download_link"]}
+            else:
+                errors.append(f"GET /api/p/packing_slip?pdf=True: {res_pdf3.status_code} {res_pdf3.text}")
+    except Exception as e:
+        errors.append(f"GET /api/p/packing_slip error: {str(e)}")
+
+    # Fallback to packing slip (JSON mode)
     url = f"https://track.delhivery.com/api/p/packing_slip?wbns={awb}" if delhivery_env == "production" else f"https://staging-express.delhivery.com/api/p/packing_slip?wbns={awb}"
     
     try:
         async with httpx.AsyncClient() as client:
             res = await client.get(url, headers={"Authorization": f"Token {delhivery_token}"})
             if res.status_code == 200:
-                return res.json()  # Delhivery returns a payload with packages[0].pdf_download_link
+                json_data = res.json()
+                json_data["debug_errors"] = errors
+                return json_data
             else:
-                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get label: {str(e)}")
+                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text} | Errors: {errors}")
+    except httpx.RequestError as e:
+        raise HTTPException(status_code=500, detail=f"Failed to connect to Delhivery: {str(e)} | Errors: {errors}")
+
 
 @app.post("/api/admin/orders/{order_id}/cancel-shipment")
 async def cancel_delhivery_shipment(order_id: str):

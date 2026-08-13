@@ -1303,23 +1303,34 @@ export const AdminPage = () => {
               };
 
               const handleGetLabel = async (orderId) => {
+                const newWindow = window.open('', '_blank');
+                if (!newWindow) {
+                  alert("Please allow popups for this site to view the label.");
+                  return;
+                }
                 try {
                   const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/label`);
                   if (res.ok) {
                     const data = await res.json();
-                    if (data.url) {
-                      window.open(data.url, '_blank');
-                    } else if (data.packages && data.packages.length > 0) {
-                      window.open(data.packages[0].pdf_download_link, '_blank');
+                    const packageData = data.packages && data.packages.length > 0 ? data.packages[0] : null;
+                    const url = data.url || (packageData && packageData.pdf_download_link);
+                    if (url) {
+                      newWindow.location.href = url;
                     } else {
-                      alert("Label URL not found in response.");
+                      newWindow.close();
+                      const errMsg = (packageData && packageData.error_message) || JSON.stringify(data);
+                      const debugStr = data.debug_errors ? `\n\nDebug Info:\n${data.debug_errors.join('\n')}` : '';
+                      alert(`Delhivery API did not return a PDF file. Reason: ${errMsg}${debugStr}\n\nPlease contact Delhivery Support to enable PDF Label Generation for your account.`);
                     }
                   } else {
+                    newWindow.close();
                     const err = await res.json();
                     alert(err.detail || "Error fetching label");
                   }
                 } catch (err) {
-                  alert("Network error while fetching label.");
+                  newWindow.close();
+                  console.error(err);
+                  alert(`Error while fetching label: ${err.message || 'Network error'}`);
                 }
               };
 
