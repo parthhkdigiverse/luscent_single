@@ -339,3 +339,23 @@ class ReturnResponse(ReturnBase):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+
+
+# Subscriber Schemas
+class SubscriberCreate(BaseModel):
+    email: EmailStr
+
+class SubscriberResponse(SubscriberCreate):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+
+class BroadcastRequest(BaseModel):
+    subject: str
+    message: str
+
+

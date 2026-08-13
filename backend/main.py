@@ -2,6 +2,7 @@ import os
 import sys
 import random
 import httpx
+import asyncio
 from datetime import datetime, timezone
 from typing import List, Optional
 import smtplib
@@ -12,14 +13,14 @@ from pydantic import BaseModel
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
@@ -27,7 +28,7 @@ from schemas import (
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
     ProductCreate, ProductUpdate, OrderStatusUpdate,
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
-    ReviewCreate, ReviewUpdate, ReviewResponse
+    ReviewCreate, ReviewUpdate, ReviewResponse, SubscriberResponse, BroadcastRequest
 )
 import schemas
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
@@ -424,7 +425,7 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
 
 @app.get("/api/orders", response_model=List[OrderResponse])
 async def get_orders(current_user: dict = Depends(get_current_user)):
-    cursor = orders_collection.find({"user_id": current_user["email"]})
+    cursor = orders_collection.find({"user_id": current_user["email"]}).sort("created_at", -1)
     orders = []
     async for document in cursor:
         orders.append(document)
@@ -460,6 +461,122 @@ async def delete_contact(contact_id: str, current_user: dict = Depends(get_admin
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Contact inquiry not found")
     return {"message": "Inquiry deleted successfully"}
+
+
+# --- Admin Subscribers Routes ---
+@app.get("/api/admin/subscribers", response_model=List[SubscriberResponse])
+async def get_all_subscribers(current_user: dict = Depends(get_admin_user)):
+    subscribers_cursor = subscribers_collection.find().sort("created_at", -1)
+    subscribers = []
+    async for doc in subscribers_cursor:
+        subscribers.append(doc)
+    return subscribers
+
+@app.delete("/api/admin/subscribers/{subscriber_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_subscriber(subscriber_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(subscriber_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid subscriber ID")
+    
+    result = await subscribers_collection.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Subscriber not found")
+    return {"message": "Subscriber removed successfully"}
+
+
+async def send_broadcast_emails(subject: str, message: str):
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = os.getenv("SMTP_PORT", 587)
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    sender_email = smtp_user
+    
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print("Warning: SMTP credentials not set in .env. Broadcast aborted.")
+        return
+
+    # Fetch all subscribers
+    subscribers = []
+    subscribers_cursor = subscribers_collection.find()
+    async for doc in subscribers_cursor:
+        subscribers.append(doc["email"])
+
+    if not subscribers:
+        print("No subscribers found for broadcast.")
+        return
+
+    print(f"Starting broadcast to {len(subscribers)} subscribers...")
+    
+    # Establish SMTP connection
+    try:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP(smtp_server, int(smtp_port))
+        if int(smtp_port) == 587:
+            server.starttls(context=context)
+        server.login(smtp_user, smtp_pass)
+        
+        for email in subscribers:
+            try:
+                msg = EmailMessage()
+                msg['Subject'] = subject
+                msg['From'] = f"Luscent Glow <{sender_email}>"
+                msg['To'] = email
+                
+                # Wrap text message in premium HTML template
+                html_body = f"""\
+                <html>
+                  <body style="font-family: sans-serif; color: #333333; line-height: 1.6; margin: 0; padding: 0; background-color: #FAF8F5;">
+                    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #FAF8F5; padding: 20px;">
+                      <tr>
+                        <td align="center">
+                          <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border: 1px solid #e5e5e5;">
+                            <!-- Header -->
+                            <tr>
+                              <td style="background-color: #ffffff; padding: 30px 40px; border-bottom: 1px solid #f0f0f0; text-align: center;">
+                                <h2 style="color: #d97743; margin: 0; font-family: Georgia, serif; font-size: 24px;">Luscent Glow</h2>
+                              </td>
+                            </tr>
+                            <!-- Body -->
+                            <tr>
+                              <td style="padding: 40px; color: #333333;">
+                                <div style="font-size: 15px; color: #333333; white-space: pre-wrap; line-height: 1.6;">{message}</div>
+                              </td>
+                            </tr>
+                            <!-- Footer -->
+                            <tr>
+                              <td style="background-color: #fafafa; padding: 20px; text-align: center; border-top: 1px solid #f0f0f0;">
+                                <p style="margin: 0; font-size: 12px; color: #888888;">&copy; 2026 Luscent Glow. All rights reserved.</p>
+                                <p style="margin: 5px 0 0 0; font-size: 11px; color: #aaaaaa;">You received this email because you subscribed to the Luscent Glow newsletter.</p>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </body>
+                </html>
+                """
+                
+                msg.set_content(message)
+                msg.add_alternative(html_body, subtype='html')
+                
+                server.send_message(msg)
+                print(f"Broadcast email sent to {email}")
+            except Exception as inner_e:
+                print(f"Failed to send broadcast email to {email}: {inner_e}")
+                
+        server.quit()
+        print("Broadcast completed successfully.")
+    except Exception as e:
+        print(f"Failed to run SMTP broadcast connection: {e}")
+
+
+@app.post("/api/admin/subscribers/broadcast")
+async def broadcast_subscribers(body: BroadcastRequest, background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+    background_tasks.add_task(send_broadcast_emails, body.subject, body.message)
+    return {"message": "Email broadcast has been queued successfully."}
 
 
 # --- Admin Routes ---
@@ -524,7 +641,7 @@ async def hard_delete_admin_user(user_id: str, current_user: dict = Depends(get_
 
 @app.get("/api/admin/orders", response_model=List[OrderResponse])
 async def get_admin_orders(current_user: dict = Depends(get_admin_user)):
-    cursor = orders_collection.find({})
+    cursor = orders_collection.find({}).sort("created_at", -1)
     orders = []
     async for document in cursor:
         orders.append(document)
@@ -1350,8 +1467,27 @@ async def adjust_inventory(product_id: str, adjustment: InventoryAdjustment, cur
 class SubscribeRequest(BaseModel):
     email: str
 
+
+def send_smtp_email_sync(msg, smtp_server, smtp_port, smtp_user, smtp_pass):
+    context = ssl.create_default_context()
+    server = smtplib.SMTP(smtp_server, int(smtp_port))
+    if int(smtp_port) == 587:
+        server.starttls(context=context)
+    server.login(smtp_user, smtp_pass)
+    server.send_message(msg)
+    server.quit()
+
+
 @app.post("/api/subscribe")
 async def subscribe_newsletter(req: SubscribeRequest):
+    # Save subscriber to collection if not already exists
+    existing = await subscribers_collection.find_one({"email": req.email})
+    if not existing:
+        await subscribers_collection.insert_one({
+            "email": req.email,
+            "created_at": datetime.now(timezone.utc)
+        })
+
     smtp_server = os.getenv("SMTP_HOST")
     smtp_port = os.getenv("SMTP_PORT", 587)
     smtp_user = os.getenv("SMTP_USER")
@@ -1367,7 +1503,7 @@ async def subscribe_newsletter(req: SubscribeRequest):
     msg['From'] = f"Luscent Glow <{sender_email}>"
     msg['To'] = req.email
 
-    msg.set_content("Hello!\n\nThank you for subscribing to the Luscent Glow Club. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.\n\nUse code GLOW10 for 10% off your first order.\nShop now: https://luscentglow.com/\n\nStay Radiant, Stay Protected,\nLuscent Glow Team")
+    msg.set_content("Hello!\n\nThank you for subscribing to the Luscent Glow Club. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.\n\nWe're excited to help you start your journey to healthy, glowing skin. Keep an eye on your inbox for expert skin tips and special offers!\nShop now: https://luscentglow.com/\n\nStay Radiant, Stay Protected,\nLuscent Glow Team")
     
     msg.add_alternative("""\
     <html>
@@ -1375,7 +1511,7 @@ async def subscribe_newsletter(req: SubscribeRequest):
         <h2 style="color:#d97743;">Welcome to the Luscent Glow Club!</h2>
         <p>Hello!</p>
         <p>Thank you for subscribing. You're on the list to receive dermatologist tips, science-backed skin tutorials, and exclusive access to new product releases.</p>
-        <p>Use code <b>GLOW10</b> for 10% off your first order.</p>
+        <p>We're excited to help you start your journey to healthy, glowing skin. Keep an eye on your inbox for expert skin tips and special offers!</p>
         <p>
           <a href="https://luscentglow.com/" style="display:inline-block; padding:10px 20px; background-color:#d97743; color:#ffffff; font-weight:bold; text-decoration:none; border-radius:5px; font-size:14px; margin-top:10px;">
             Shop Now
@@ -1388,13 +1524,14 @@ async def subscribe_newsletter(req: SubscribeRequest):
     """, subtype='html')
 
     try:
-        context = ssl.create_default_context()
-        server = smtplib.SMTP(smtp_server, int(smtp_port))
-        if int(smtp_port) == 587:
-            server.starttls(context=context)
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
-        server.quit()
+        await asyncio.to_thread(
+            send_smtp_email_sync,
+            msg,
+            smtp_server,
+            int(smtp_port),
+            smtp_user,
+            smtp_pass
+        )
         print(f"Subscription email successfully sent to {req.email}")
     except Exception as e:
         print(f"Failed to send subscription email: {e}")

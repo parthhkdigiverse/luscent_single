@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
   TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare,
-  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star
+  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star,
+  Mail, Send
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -41,9 +42,15 @@ export const AdminPage = () => {
   const [searchOrderQuery, setSearchOrderQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [productsList, setProductsList] = useState([]);
+  const [productCategoryFilter, setProductCategoryFilter] = useState("All");
   const [usersList, setUsersList] = useState([]);
   const [reviewsList, setReviewsList] = useState([]);
   const [inquiriesList, setInquiriesList] = useState([]);
+  const [subscribersList, setSubscribersList] = useState([]);
+  const [showBroadcastModal, setShowBroadcastModal] = useState(false);
+  const [broadcastSubject, setBroadcastSubject] = useState("");
+  const [broadcastMessage, setBroadcastMessage] = useState("");
+  const [submittingBroadcast, setSubmittingBroadcast] = useState(false);
   const [showDeletedUsers, setShowDeletedUsers] = useState(false);
   const [couponsList, setCouponsList] = useState([]);
   const [returnsList, setReturnsList] = useState([]);
@@ -289,6 +296,49 @@ export const AdminPage = () => {
     }
   };
 
+  const handleDeleteSubscriber = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this subscriber?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/subscribers/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSubscribersList(subscribersList.filter(sub => sub._id !== id));
+      } else {
+        alert("Failed to delete subscriber.");
+      }
+    } catch (err) {
+      alert("Error deleting subscriber.");
+    }
+  };
+
+  const handleSendBroadcast = async (e) => {
+    e.preventDefault();
+    if (!broadcastSubject || !broadcastMessage) {
+      alert("Please enter a subject and a message.");
+      return;
+    }
+    setSubmittingBroadcast(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/subscribers/broadcast`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: broadcastSubject, message: broadcastMessage })
+      });
+      if (res.ok) {
+        alert("Email broadcast has been queued successfully!");
+        setShowBroadcastModal(false);
+        setBroadcastSubject("");
+        setBroadcastMessage("");
+      } else {
+        const data = await res.json();
+        alert(data.detail || "Failed to send email broadcast.");
+      }
+    } catch (err) {
+      alert("Error sending email broadcast.");
+    } finally {
+      setSubmittingBroadcast(false);
+    }
+  };
+
   const fetchDashboardData = async () => {
     setLoading(true);
     setError("");
@@ -338,7 +388,11 @@ export const AdminPage = () => {
       const enhancedOrders = mergedOrders.map(o => {
         const orderUser = apiUsers.find(u => u.email === o.email || (o.user_id && u._id === o.user_id));
         return { ...o, user_data: orderUser };
-      }).sort((a, b) => new Date(b.created_at || Date.now()) - new Date(a.created_at || Date.now()));
+      }).sort((a, b) => {
+        const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return tB - tA;
+      });
       setOrders(enhancedOrders);
 
       // Compute dynamic revenue and order metrics
@@ -405,6 +459,13 @@ export const AdminPage = () => {
       if (contactsRes.ok) {
         const contactsData = await contactsRes.json();
         setInquiriesList(contactsData);
+      }
+
+      // Subscribers
+      const subscribersRes = await fetchAuth(`${API_URL}/api/admin/subscribers`);
+      if (subscribersRes.ok) {
+        const subscribersData = await subscribersRes.json();
+        setSubscribersList(subscribersData);
       }
       
       // Reviews
@@ -992,6 +1053,7 @@ export const AdminPage = () => {
             <NavItem id="returns" label="Returns & Refunds" icon={RotateCcw} />
             <NavItem id="reviews" label="Reviews" icon={Star} />
             <NavItem id="inquiries" label="Inquiries" icon={MessageSquare} />
+            <NavItem id="subscribers" label="Subscribers" icon={Mail} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
             <NavItem id="content" label="Content" icon={FileText} />
           </div>
@@ -1560,44 +1622,66 @@ export const AdminPage = () => {
               />
             )}
 
-            {activeTab === "products" && (
-              <div className="space-y-6">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Products</h2>
-                    <p className="text-xs sm:text-sm text-brand-grey">{productsList.length} products • Manage your store catalog</p>
+            {activeTab === "products" && (() => {
+              const filteredProducts = productsList.filter(p => 
+                productCategoryFilter === "All" || p.category === productCategoryFilter
+              );
+              return (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div>
+                      <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Products</h2>
+                      <p className="text-xs sm:text-sm text-brand-grey">{filteredProducts.length} products • Manage your store catalog</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <select
+                        value={productCategoryFilter}
+                        onChange={(e) => setProductCategoryFilter(e.target.value)}
+                        className="w-40 px-3.5 py-2 bg-brand-bg/50 border border-brand-card/40 rounded-xl text-xs focus:outline-none focus:border-brand-dark cursor-pointer font-medium h-[36px]"
+                      >
+                        <option value="All">All Categories</option>
+                        <option value="sunscreen">Sunscreen</option>
+                        <option value="face-wash">Face Wash</option>
+                        <option value="combo">Combo</option>
+                      </select>
+                      <Button variant="primary" onClick={handleAddNewProductClick} className="text-xs py-2 px-4 bg-brand-dark text-white hover:bg-black flex items-center gap-1.5 shadow-sm rounded-full h-[36px]">
+                        <Plus size={14} /> Add Product
+                      </Button>
+                    </div>
                   </div>
-                  <Button variant="primary" onClick={handleAddNewProductClick} className="text-xs py-2 px-4 bg-brand-dark text-white hover:bg-black flex items-center gap-1.5 shadow-sm rounded-full h-[36px]">
-                    <Plus size={14} /> Add Product
-                  </Button>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {productsList.map(p => (
-                    <div key={p.id} className="border border-brand-card/40 rounded-2xl p-4 flex gap-4 bg-brand-bg/10 hover:border-brand-card transition shadow-sm">
-                      <div className="w-16 h-16 rounded-xl bg-white overflow-hidden border border-brand-card/30 flex-shrink-0">
-                        <img src={p.images?.[0] ? `${p.images[0]}?v=${imgCacheBust}` : `/images/sunscreen.png?v=${imgCacheBust}`} alt={p.name} className="w-full h-full object-cover" />
-                      </div>
-                      <div className="flex-1 min-w-0 text-left">
-                        <h4 className="font-serif text-sm font-semibold text-brand-dark truncate">{p.name}</h4>
-                        <p className="text-[10px] text-brand-grey uppercase tracking-wider font-semibold mt-0.5">{p.netVolume}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <span className="text-xs font-bold text-brand-dark">₹{p.price}</span>
-                          {p.originalPrice && <span className="text-[10px] text-brand-grey line-through">₹{p.originalPrice}</span>}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {filteredProducts.map(p => (
+                      <div key={p.id} className="border border-brand-card/40 rounded-2xl p-4 flex gap-4 bg-brand-bg/10 hover:border-brand-card transition shadow-sm">
+                        <div className="w-16 h-16 rounded-xl bg-white overflow-hidden border border-brand-card/30 flex-shrink-0">
+                          <img src={p.images?.[0] ? `${p.images[0]}?v=${imgCacheBust}` : `/images/sunscreen.png?v=${imgCacheBust}`} alt={p.name} className="w-full h-full object-cover" />
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <h4 className="font-serif text-sm font-semibold text-brand-dark truncate">{p.name}</h4>
+                          <p className="text-[10px] text-brand-grey uppercase tracking-wider font-semibold mt-0.5">{p.netVolume}</p>
+                          <div className="flex items-center gap-2 mt-2">
+                            <span className="text-xs font-bold text-brand-dark">₹{p.price}</span>
+                            {p.originalPrice && <span className="text-[10px] text-brand-grey line-through">₹{p.originalPrice}</span>}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 justify-center">
+                          <button onClick={() => handleEditProductClick(p)} className="p-2 rounded-lg bg-white border border-brand-card/40 hover:bg-brand-dark hover:text-white text-brand-grey transition shadow-sm">
+                            <Edit2 size={13} />
+                          </button>
+                          <button onClick={() => handleDeleteProduct(p.id)} className="p-2 rounded-lg bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white transition shadow-sm">
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
-                      <div className="flex flex-col gap-2 justify-center">
-                        <button onClick={() => handleEditProductClick(p)} className="p-2 rounded-lg bg-white border border-brand-card/40 hover:bg-brand-dark hover:text-white text-brand-grey transition shadow-sm">
-                          <Edit2 size={13} />
-                        </button>
-                        <button onClick={() => handleDeleteProduct(p.id)} className="p-2 rounded-lg bg-red-50 text-red-600 border border-red-100 hover:bg-red-600 hover:text-white transition shadow-sm">
-                          <Trash2 size={13} />
-                        </button>
+                    ))}
+                    {filteredProducts.length === 0 && (
+                      <div className="col-span-1 md:col-span-2 text-center py-12 text-xs text-brand-grey border border-dashed border-brand-card/60 rounded-3xl bg-brand-bg/30">
+                        No products found in this category.
                       </div>
-                    </div>
-                  ))}
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {activeTab === "users" && (() => {
               const filteredUsers = usersList.filter(u => showDeletedUsers ? u.is_deleted : !u.is_deleted);
@@ -1985,12 +2069,37 @@ export const AdminPage = () => {
 
             {activeTab === "reviews" && (() => {
               const filteredReviews = reviewsList.filter((rev) => {
-                const matchesSearch = (
-                  (rev.name || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
-                  (rev.title || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
-                  (rev.comment || "").toLowerCase().includes(reviewSearchQuery.toLowerCase()) ||
-                  (rev.product_id || "").toLowerCase().includes(reviewSearchQuery.toLowerCase())
-                );
+                const matchesSearch = (() => {
+                  if (!reviewSearchQuery) return true;
+                  const q = reviewSearchQuery.toLowerCase().trim();
+                  
+                  // Check basic fields
+                  if ((rev.name || "").toLowerCase().includes(q)) return true;
+                  if ((rev.title || "").toLowerCase().includes(q)) return true;
+                  if ((rev.comment || "").toLowerCase().includes(q)) return true;
+                  if ((rev.product_id || "").toLowerCase().includes(q)) return true;
+                  
+                  // Check product name from productsList
+                  const product = productsList.find(p => p.id === rev.product_id || p._id === rev.product_id);
+                  if (product && (product.name || "").toLowerCase().includes(q)) return true;
+                  
+                  // Check rating
+                  if (String(rev.rating) === q) return true;
+                  if (`${rev.rating} star`.includes(q)) return true;
+                  if (`${rev.rating} stars`.includes(q)) return true;
+                  const starCount = (q.match(/★/g) || []).length;
+                  if (starCount > 0 && rev.rating === starCount) return true;
+                  
+                  // Check date formatted
+                  if (rev.created_at) {
+                    const formattedDate = new Date(rev.created_at.endsWith("Z") ? rev.created_at : rev.created_at + "Z")
+                      .toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })
+                      .toLowerCase();
+                    if (formattedDate.includes(q)) return true;
+                  }
+                  
+                  return false;
+                })();
                 const matchesRating = reviewRatingFilter === "all" || rev.rating === parseInt(reviewRatingFilter);
                 return matchesSearch && matchesRating;
               });
@@ -2016,7 +2125,7 @@ export const AdminPage = () => {
                     <div className="relative flex-1 w-full">
                       <input
                         type="text"
-                        placeholder="Search by reviewer, title, comment or product ID..."
+                        placeholder="Search by reviewer, title, comment, rating, product or date..."
                         value={reviewSearchQuery}
                         onChange={(e) => setReviewSearchQuery(e.target.value)}
                         className="w-full pl-4 pr-4 py-2 bg-brand-bg/50 border border-brand-card/40 rounded-xl text-xs focus:outline-none focus:border-brand-dark"
@@ -2207,12 +2316,141 @@ export const AdminPage = () => {
                 </div>
               </div>
             )}
+
+            {/* Subscribers Tab */}
+            {activeTab === "subscribers" && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Newsletter Subscribers</h2>
+                    <p className="text-xs sm:text-sm text-brand-grey">{subscribersList.length} subscribers • Users who subscribed to the newsletter</p>
+                  </div>
+                  <Button
+                    variant="primary"
+                    onClick={() => setShowBroadcastModal(true)}
+                    className="text-xs py-2 px-5 bg-brand-dark text-white hover:bg-black rounded-full flex items-center gap-1.5 shadow-sm h-[36px]"
+                  >
+                    <Send size={14} /> <span className="font-semibold tracking-wide">Broadcast Email</span>
+                  </Button>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-sm border border-brand-card/30 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-brand-bg/50 border-b border-brand-card/30 text-brand-grey font-semibold uppercase tracking-wider text-[10px]">
+                          <th className="p-5 w-48">Subscribed Date</th>
+                          <th className="p-5">Email Address</th>
+                          <th className="p-5 w-24 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-card/20">
+                        {subscribersList.map((sub) => (
+                          <tr key={sub._id} className="hover:bg-brand-bg/30 transition">
+                            <td className="p-5 text-brand-grey whitespace-nowrap">
+                              {new Date(sub.created_at.endsWith("Z") ? sub.created_at : sub.created_at + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true })}
+                            </td>
+                            <td className="p-5 font-medium text-brand-dark">
+                              {sub.email}
+                            </td>
+                            <td className="p-5 text-right">
+                              <button
+                                onClick={() => handleDeleteSubscriber(sub._id)}
+                                className="w-8 h-8 rounded-full inline-flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 transition"
+                                title="Remove Subscriber"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {subscribersList.length === 0 && (
+                          <tr>
+                            <td colSpan="3" className="p-10 text-center text-brand-grey">
+                              No subscribers found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}
 
       {/* Edit/Add Admin Review Dialog Modal */}
       <AnimatePresence>
+        {showBroadcastModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-[32px] border border-brand-card/40 shadow-2xl max-w-xl w-full flex flex-col"
+            >
+              <div className="flex justify-between items-center border-b border-brand-card/40 p-6 flex-shrink-0">
+                <h3 className="font-serif text-xl font-semibold text-brand-dark">
+                  Broadcast Newsletter Email
+                </h3>
+                <button onClick={() => setShowBroadcastModal(false)} className="text-brand-grey hover:text-brand-dark p-1 rounded-full hover:bg-brand-bg transition">
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendBroadcast} className="p-6 space-y-4 text-sm text-left">
+                <p className="text-xs text-brand-grey mb-2">
+                  This message will be sent to all <strong>{subscribersList.length}</strong> active newsletter subscribers in the background.
+                </p>
+                <div>
+                  <label className="font-semibold block mb-1">Email Subject</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Exciting New Product Launch!"
+                    value={broadcastSubject}
+                    onChange={(e) => setBroadcastSubject(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark"
+                  />
+                </div>
+                <div>
+                  <label className="font-semibold block mb-1">Message Body</label>
+                  <textarea
+                    required
+                    rows={8}
+                    placeholder="Write your newsletter message here... Plain text will be automatically wrapped in our brand email template."
+                    value={broadcastMessage}
+                    onChange={(e) => setBroadcastMessage(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark font-sans text-xs leading-relaxed"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-brand-card/40">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowBroadcastModal(false)}
+                    disabled={submittingBroadcast}
+                    className="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold border border-brand-card rounded-full"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={submittingBroadcast}
+                    className="px-5 py-2.5 text-xs uppercase tracking-widest font-semibold bg-brand-dark text-white hover:bg-black rounded-full flex items-center gap-1.5"
+                  >
+                    {submittingBroadcast ? "Queuing..." : "Send Broadcast"} <Send size={12} />
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+
         {showAdminReviewModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm overflow-y-auto">
             <motion.div

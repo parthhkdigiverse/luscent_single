@@ -54,7 +54,7 @@ export const Newsletter = () => {
           <div className="flex flex-col items-center justify-center gap-2 bg-white border border-brand-card/50 p-6 rounded-2xl max-w-md mx-auto shadow-sm">
             <CheckCircle2 className="text-brand-green" size={24} />
             <p className="text-sm font-semibold text-brand-dark">You're on the list!</p>
-            <p className="text-xs text-brand-grey">Thank you for subscribing. Use code GLOW10 for 10% off your first order.</p>
+            <p className="text-xs text-brand-grey">Thank you for subscribing. We've sent a welcome email to your inbox!</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-2 max-w-md mx-auto">
