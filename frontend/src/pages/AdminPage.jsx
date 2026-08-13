@@ -13,7 +13,7 @@ import { OurStoryPage } from "./OurStoryPage";
 import { faqs as defaultFaqs } from "../data/faqs";
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export const AdminPage = () => {
   // Authentication Gate State
@@ -4103,16 +4103,14 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {productsList.map(prod => {
+        {productsList.filter(prod => (prod.id || prod._id) !== "combo").map(prod => {
           const inv = inventoryList.find(i => i.product_id === (prod.id || prod._id)) || { current: 0, available: 0, reserved: 0, marketing: 0, damaged: 0 };
-          const isCombo = prod.id === "combo";
           
           return (
             <div key={prod.id || prod._id} className="bg-white border border-brand-card/50 rounded-2xl p-5 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start gap-4 mb-6">
                 <div className="w-12 h-12 rounded-xl border border-brand-card/30 overflow-hidden bg-brand-bg flex-shrink-0 relative">
                   <img src={prod.images?.[0] || "/images/sunscreen.png"} alt={prod.name} className="w-full h-full object-cover" />
-                  {isCombo && <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />}
                 </div>
                 <div>
                   <h4 className="font-bold text-sm text-brand-dark line-clamp-1">{prod.name}</h4>
@@ -4174,8 +4172,19 @@ const InventoryTab = ({ productsList, inventoryList, inventoryHistory, API_URL, 
                 <label className="block text-[11px] font-bold text-brand-grey uppercase tracking-wide mb-1.5">Product</label>
                 <select value={selectedProduct} onChange={e => setSelectedProduct(e.target.value)} required className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl text-sm focus:outline-none focus:border-brand-dark">
                   <option value="">Select Product...</option>
-                  {productsList.map(p => <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>)}
+                  {productsList.filter(p => (p.id || p._id) !== "combo").map(p => <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>)}
                 </select>
+                {selectedProduct && (() => {
+                  const inv = inventoryList.find(i => i.product_id === selectedProduct) || { available: 0, reserved: 0, marketing: 0, damaged: 0 };
+                  return (
+                    <div className="mt-3 grid grid-cols-4 gap-2 bg-brand-bg/50 p-3 rounded-xl border border-brand-card/30">
+                      <div className="text-center"><div className="text-[9px] font-bold text-brand-grey uppercase mb-0.5">Available</div><div className="text-sm font-bold text-brand-dark">{inv.available || 0}</div></div>
+                      <div className="text-center"><div className="text-[9px] font-bold text-brand-grey uppercase mb-0.5">Reserved</div><div className="text-sm font-bold text-brand-dark">{inv.reserved || 0}</div></div>
+                      <div className="text-center"><div className="text-[9px] font-bold text-brand-grey uppercase mb-0.5">Marketing</div><div className="text-sm font-bold text-brand-dark">{inv.marketing || 0}</div></div>
+                      <div className="text-center"><div className="text-[9px] font-bold text-brand-grey uppercase mb-0.5">Damaged</div><div className="text-sm font-bold text-brand-dark">{inv.damaged || 0}</div></div>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="flex border border-brand-card rounded-xl overflow-hidden text-sm mb-2">
                 <button type="button" onClick={() => setAdjustAction("adjust")} className={`flex-1 py-2 font-bold transition-colors ${adjustAction === "adjust" ? "bg-brand-dark text-white" : "bg-brand-bg/50 text-brand-grey hover:bg-brand-bg"}`}>
@@ -4518,15 +4527,233 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsLis
   };
 
   const downloadPDF = (filename, title, data, headers) => {
-    const doc = new jsPDF();
-    doc.text(title, 14, 15);
-    doc.autoTable({
+    // Determine orientation: if columns > 5, use landscape
+    const orientation = headers.length > 5 ? 'l' : 'p';
+    const doc = new jsPDF(orientation, 'mm', 'a4');
+    
+    const pageWidth = doc.internal.pageSize.width || doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.height || doc.internal.pageSize.getHeight();
+
+    // 1. Draw elegant Minimalist Header
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(28, 27, 25); // brand-dark #1C1B19
+    doc.text("LUSCENT GLOW", 14, 15);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(107, 101, 96); // brand-grey #6B6560
+    doc.text("ADMINISTRATIVE PORTAL", 14, 19);
+
+    const dateStr = new Date().toLocaleDateString('en-IN', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit'
+    });
+
+    // Right-aligned report header metadata
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(107, 101, 96);
+    doc.text(`EXPORTED: ${dateStr.toUpperCase()}`, pageWidth - 14, 15, { align: 'right' });
+    doc.text(`STATUS: ACTIVE SESSION`, pageWidth - 14, 19, { align: 'right' });
+
+    // Thin accent divider line below main header
+    doc.setDrawColor(229, 231, 235); // Light gray
+    doc.setLineWidth(0.2);
+    doc.line(14, 22, pageWidth - 14, 22);
+
+    // 2. Report Document Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(28, 27, 25); // brand-dark #1C1B19
+    doc.text(title, 14, 32);
+
+    // Summary metadata container card
+    const boxY = 37;
+    const boxHeight = 11;
+    doc.setFillColor(250, 248, 245); // brand-bg #FAF8F5
+    doc.setDrawColor(230, 223, 213); // brand-card border #E6DFD5
+    doc.setLineWidth(0.15);
+    doc.roundedRect(14, boxY, pageWidth - 28, boxHeight, 1.5, 1.5, 'FD');
+
+    // Horizontal column placement inside the summary card
+    const col1X = 18;
+    const col2X = pageWidth * 0.38;
+    const col3X = pageWidth * 0.72;
+
+    // Field 1: Report Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(28, 27, 25);
+    doc.text("Report Title:", col1X, boxY + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 101, 96);
+    doc.text(title, col1X + 18, boxY + 7);
+
+    // Field 2: Generated On Date
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(28, 27, 25);
+    doc.text("Generated:", col2X, boxY + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 101, 96);
+    doc.text(dateStr, col2X + 16, boxY + 7);
+
+    // Field 3: Total Records Count
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(28, 27, 25);
+    doc.text("Total Records:", col3X, boxY + 7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 101, 96);
+    doc.text(String(data.length), col3X + 21, boxY + 7);
+
+    // 3. Calculate footer sum if applicable
+    let footerRow = null;
+    if (data.length > 0) {
+      if (title === "Sales Report") {
+        const totalQty = data.reduce((acc, row) => acc + Number(row[3] || 0), 0);
+        const totalRev = data.reduce((acc, row) => acc + Number(row[4] || 0), 0);
+        footerRow = ["Total", "", "", totalQty, `Rs. ${totalRev.toFixed(2)}`, ""];
+      } else if (title === "Revenue Report") {
+        const totalGross = data.reduce((acc, row) => acc + Number(row[3] || 0), 0);
+        const totalDisc = data.reduce((acc, row) => acc + Number(row[4] || 0), 0);
+        const totalNet = data.reduce((acc, row) => acc + Number(row[5] || 0), 0);
+        footerRow = ["Total", "", "", `Rs. ${totalGross.toFixed(2)}`, `Rs. ${totalDisc.toFixed(2)}`, `Rs. ${totalNet.toFixed(2)}`];
+      } else if (title === "Product Report") {
+        const totalQty = data.reduce((acc, row) => acc + Number(row[1] || 0), 0);
+        const totalRev = data.reduce((acc, row) => acc + Number(row[2] || 0), 0);
+        footerRow = ["Total", totalQty, `Rs. ${totalRev.toFixed(2)}`];
+      } else if (title === "Coupon Report") {
+        const totalCount = data.reduce((acc, row) => acc + Number(row[1] || 0), 0);
+        const totalDiscount = data.reduce((acc, row) => acc + Number(row[2] || 0), 0);
+        footerRow = ["Total", totalCount, `Rs. ${totalDiscount.toFixed(2)}`];
+      } else if (title === "Customer Report") {
+        const totalOrders = data.reduce((acc, row) => acc + Number(row[3] || 0), 0);
+        const totalSpent = data.reduce((acc, row) => acc + Number(row[4] || 0), 0);
+        footerRow = ["Total", "", "", totalOrders, `Rs. ${totalSpent.toFixed(2)}`];
+      } else if (title === "COD Report") {
+        const totalAmount = data.reduce((acc, row) => acc + Number(row[4] || 0), 0);
+        footerRow = ["Total", "", "", "", `Rs. ${totalAmount.toFixed(2)}`];
+      } else if (title === "Online Payment Report") {
+        const totalAmount = data.reduce((acc, row) => acc + Number(row[5] || 0), 0);
+        footerRow = ["Total", "", "", "", "", `Rs. ${totalAmount.toFixed(2)}`];
+      } else if (title === "Cancelled Report") {
+        const totalAmount = data.reduce((acc, row) => acc + Number(row[4] || 0), 0);
+        footerRow = ["Total", "", "", "", `Rs. ${totalAmount.toFixed(2)}`, ""];
+      } else if (title === "Inventory Report") {
+        const totalVal = data.reduce((acc, row) => acc + Number(row[5] || 0), 0);
+        footerRow = ["Total", "", "", "", "", `Rs. ${totalVal.toFixed(2)}`];
+      } else if (title === "Return Report") {
+        const totalRefund = data.reduce((acc, row) => acc + Number(row[7] || 0), 0);
+        footerRow = ["Total", "", "", "", "", "", "", `Rs. ${totalRefund.toFixed(2)}`];
+      } else if (title === "Refund Report") {
+        const totalRefund = data.reduce((acc, row) => acc + Number(row[5] || 0), 0);
+        footerRow = ["Total", "", "", "", "", `Rs. ${totalRefund.toFixed(2)}`];
+      }
+    }
+
+    // 4. Calculate Column Alignments (Numbers -> right, Text -> left)
+    const columnStyles = {};
+    headers.forEach((header, index) => {
+      const h = header.toLowerCase();
+      if (
+        h.includes("revenue") || 
+        h.includes("price") || 
+        h.includes("amount") || 
+        h.includes("discount") || 
+        h.includes("spent") || 
+        h.includes("value") || 
+        h.includes("sold") || 
+        h.includes("count") || 
+        h.includes("qty") || 
+        h.includes("quantity") || 
+        h.includes("available") || 
+        h.includes("reserved") || 
+        h.includes("marketing") || 
+        h.includes("damaged") || 
+        h.includes("total items")
+      ) {
+        columnStyles[index] = { halign: 'right' };
+      } else {
+        columnStyles[index] = { halign: 'left' };
+      }
+    });
+
+    // 5. Draw table
+    autoTable(doc, {
       head: [headers],
       body: data,
-      startY: 20,
+      foot: footerRow ? [footerRow] : undefined,
+      startY: 53,
+      theme: 'striped',
+      styles: {
+        fontSize: 8,
+        cellPadding: 3,
+        valign: 'middle',
+        overflow: 'linebreak',
+        font: 'helvetica',
+        textColor: [28, 27, 25], // brand-dark #1C1B19
+        lineWidth: 0.1, // Fine horizontal line borders
+        lineColor: [229, 231, 235] // Soft grey border
+      },
+      headStyles: {
+        fillColor: [243, 239, 233], // brand-card #F3EFE9
+        textColor: [28, 27, 25], // brand-dark #1C1B19
+        fontStyle: 'bold',
+        fontSize: 8.5,
+        cellPadding: 3.5
+      },
+      footStyles: {
+        fillColor: [243, 239, 233], // brand-card #F3EFE9
+        textColor: [28, 27, 25], // brand-dark #1C1B19
+        fontStyle: 'bold',
+        fontSize: 8.5,
+        lineWidth: 0.2,
+        lineColor: [217, 212, 204]
+      },
+      alternateRowStyles: {
+        fillColor: [250, 248, 245] // brand-bg #FAF8F5
+      },
+      columnStyles: columnStyles,
+      margin: { top: 24, bottom: 20, left: 14, right: 14 },
+      didDrawPage: (pageData) => {
+        // Draw elegant minimal top header on subsequent pages
+        if (pageData.pageNumber > 1) {
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(8.5);
+          doc.setTextColor(28, 27, 25); // brand-dark #1C1B19
+          doc.text("LUSCENT GLOW", 14, 12);
+          
+          doc.setFont('helvetica', 'normal');
+          doc.setFontSize(8);
+          doc.setTextColor(107, 101, 96); // brand-grey
+          doc.text(`—  ${title}`, 42, 12);
+
+          // Right aligned page index
+          doc.text(`Page ${pageData.pageNumber}`, pageWidth - 14, 12, { align: 'right' });
+
+          // Divider line
+          doc.setDrawColor(229, 231, 235);
+          doc.setLineWidth(0.2);
+          doc.line(14, 15, pageWidth - 14, 15);
+        }
+
+        // Draw elegant Footer on all pages
+        // Divider line above footer
+        doc.setDrawColor(243, 239, 233);
+        doc.setLineWidth(0.2);
+        doc.line(14, pageHeight - 14, pageWidth - 14, pageHeight - 14);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(156, 163, 175);
+        doc.text("LUSCENT GLOW  |  Confidential Administrative Report", 14, pageHeight - 9);
+        doc.text(`Page ${pageData.pageNumber}`, pageWidth - 14, pageHeight - 9, { align: 'right' });
+      }
     });
+
     doc.save(filename);
   };
+
 
   const [previewReport, setPreviewReport] = useState(null);
 
@@ -4602,7 +4829,7 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsLis
         data = orders.filter(o => o.paymentMethod === "cod").map(o => [
           o.order_number || o._id,
           new Date(o.created_at).toLocaleDateString(),
-          o.name,
+          o.name || "N/A",
           o.status,
           o.totalPrice
         ]);
@@ -4613,7 +4840,7 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsLis
         data = orders.filter(o => o.paymentMethod === "prepaid").map(o => [
           o.order_number || o._id,
           new Date(o.created_at).toLocaleDateString(),
-          o.name,
+          o.name || "N/A",
           o.gateway || "Razorpay",
           o.status,
           o.totalPrice
@@ -4625,7 +4852,7 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsLis
         data = orders.filter(o => o.status === "cancelled").map(o => [
           o.order_number || o._id,
           new Date(o.created_at).toLocaleDateString(),
-          o.name,
+          o.name || "N/A",
           o.paymentMethod,
           o.totalPrice,
           o.cancelReason || "User Request"
@@ -4718,7 +4945,7 @@ const ReportsTab = ({ orders, productsList, inventoryList, usersList, returnsLis
           <h2 className="font-serif text-3xl font-bold text-brand-dark tracking-tight">Reports</h2>
           <p className="text-sm text-brand-grey mt-1.5">Everything you need to understand your business.</p>
         </div>
-        <Button variant="outline" onClick={() => generateReport('sales', 'excel')} className="border-brand-card shadow-sm hover:bg-brand-bg rounded-full px-5 h-[40px] flex gap-2 items-center text-brand-dark">
+        <Button variant="outline" onClick={() => handleDownload('sales', 'excel')} className="border-brand-card shadow-sm hover:bg-brand-bg rounded-full px-5 h-[40px] flex gap-2 items-center text-brand-dark">
           <Download size={16} /> <span className="font-semibold tracking-wide text-sm">Export all</span>
         </Button>
       </div>

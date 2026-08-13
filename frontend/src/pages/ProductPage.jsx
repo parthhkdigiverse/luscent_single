@@ -202,32 +202,41 @@ export const ProductPage = () => {
               <div className="flex items-center border border-brand-card rounded-full bg-brand-bg px-3 py-1">
                 <button
                   onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                  className="w-8 h-8 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark text-lg"
+                  disabled={product.available_stock <= 0}
+                  className="w-8 h-8 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   -
                 </button>
-                <span className="w-12 text-center text-xs font-semibold text-brand-dark">{quantity}</span>
+                <span className="w-12 text-center text-xs font-semibold text-brand-dark">
+                  {product.available_stock <= 0 ? 0 : quantity}
+                </span>
                 <button
                   onClick={() => setQuantity(quantity + 1)}
-                  className="w-8 h-8 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark text-lg"
+                  disabled={product.available_stock <= 0 || quantity >= product.available_stock}
+                  className="w-8 h-8 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   +
                 </button>
               </div>
+              {product.available_stock > 0 && product.available_stock <= 5 && (
+                <span className="text-xs font-semibold text-brand-accent">Only {product.available_stock} left!</span>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-2">
               <Button
                 onClick={handleAddToCart}
-                variant="primary"
-                className="w-full py-4 text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                disabled={product.available_stock <= 0}
+                variant={product.available_stock <= 0 ? "outline" : "primary"}
+                className={`w-full py-4 text-xs uppercase tracking-widest flex items-center justify-center gap-2 ${product.available_stock <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
               >
-                <ShoppingBag size={14} /> Add to Cart
+                <ShoppingBag size={14} /> {product.available_stock <= 0 ? "Out of Stock" : "Add to Cart"}
               </Button>
               <Button
                 onClick={handleBuyNow}
+                disabled={product.available_stock <= 0}
                 variant={product.id === "face-wash" ? "navy" : "secondary"}
-                className="w-full py-4 text-xs uppercase tracking-widest"
+                className={`w-full py-4 text-xs uppercase tracking-widest ${product.available_stock <= 0 ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 Buy It Now
               </Button>

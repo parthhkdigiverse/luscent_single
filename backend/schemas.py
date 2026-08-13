@@ -79,6 +79,7 @@ class ProductBase(BaseModel):
 
 class ProductResponse(ProductBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    available_stock: Optional[int] = None
 
     class Config:
         populate_by_name = True

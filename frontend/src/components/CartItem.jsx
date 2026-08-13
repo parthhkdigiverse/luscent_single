@@ -51,7 +51,8 @@ export const CartItem = ({ item }) => {
             </span>
             <button
               onClick={() => updateQty(item.id, item.quantity + 1)}
-              className="w-6 h-6 flex items-center justify-center text-brand-grey hover:text-brand-dark transition-colors"
+              disabled={item.available_stock !== undefined && item.quantity >= item.available_stock}
+              className="w-6 h-6 flex items-center justify-center text-brand-grey hover:text-brand-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
               <Plus size={12} />
             </button>

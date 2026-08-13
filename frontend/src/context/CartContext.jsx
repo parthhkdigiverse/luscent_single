@@ -10,13 +10,22 @@ const cartReducer = (state, action) => {
 
       if (existingItemIndex > -1) {
         const newItems = [...state.items];
-        newItems[existingItemIndex].quantity += quantity;
+        let newQty = newItems[existingItemIndex].quantity + quantity;
+        if (product.available_stock !== undefined && newQty > product.available_stock) {
+          newQty = product.available_stock;
+        }
+        newItems[existingItemIndex].quantity = newQty;
         return { ...state, items: newItems };
+      }
+
+      let newQty = quantity;
+      if (product.available_stock !== undefined && newQty > product.available_stock) {
+        newQty = product.available_stock;
       }
 
       return {
         ...state,
-        items: [...state.items, { ...product, quantity }]
+        items: [...state.items, { ...product, quantity: newQty }]
       };
     }
     case "REMOVE_FROM_CART":
@@ -34,9 +43,16 @@ const cartReducer = (state, action) => {
       }
       return {
         ...state,
-        items: state.items.map(item =>
-          item.id === productId ? { ...item, quantity } : item
-        )
+        items: state.items.map(item => {
+          if (item.id === productId) {
+            let newQty = quantity;
+            if (item.available_stock !== undefined && newQty > item.available_stock) {
+              newQty = item.available_stock;
+            }
+            return { ...item, quantity: newQty };
+          }
+          return item;
+        })
       };
     }
     case "CLEAR_CART":

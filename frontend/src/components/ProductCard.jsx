@@ -90,14 +90,17 @@ export const ProductCard = ({ product }) => {
 
           <button
             onClick={handleAddToCart}
+            disabled={product.available_stock <= 0}
             className={`w-10 h-10 rounded-full flex items-center justify-center text-white transition-all duration-300 ${
-              isCombo 
-                ? "bg-brand-dark hover:bg-black" 
-                : product.id === "sunscreen" 
-                  ? "bg-brand-accent hover:bg-[#c25a20]" 
-                  : "bg-brand-secondary hover:bg-[#152945]"
+              product.available_stock <= 0
+                ? "bg-brand-grey/50 cursor-not-allowed"
+                : isCombo 
+                  ? "bg-brand-dark hover:bg-black" 
+                  : product.id === "sunscreen" 
+                    ? "bg-brand-accent hover:bg-[#c25a20]" 
+                    : "bg-brand-secondary hover:bg-[#152945]"
             }`}
-            title="Quick Add to Cart"
+            title={product.available_stock <= 0 ? "Out of Stock" : "Quick Add to Cart"}
           >
             <ShoppingBag size={16} />
           </button>

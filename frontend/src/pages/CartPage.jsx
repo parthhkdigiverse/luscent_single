@@ -87,7 +87,8 @@ export const CartPage = () => {
                           <span className="w-8 text-center text-xs font-semibold text-brand-dark">{item.quantity}</span>
                           <button
                             onClick={() => updateQty(item.id, item.quantity + 1)}
-                            className="w-7 h-7 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark"
+                            disabled={item.available_stock !== undefined && item.quantity >= item.available_stock}
+                            className="w-7 h-7 flex items-center justify-center font-bold text-brand-grey hover:text-brand-dark disabled:opacity-30 disabled:cursor-not-allowed"
                           >
                             +
                           </button>

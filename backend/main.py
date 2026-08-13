@@ -373,6 +373,16 @@ async def get_products():
     cursor = products_collection.find({})
     products = []
     async for document in cursor:
+        prod_id = document.get("id")
+        if prod_id == "combo":
+            fw_inv = await inventory_collection.find_one({"product_id": "face-wash"})
+            ss_inv = await inventory_collection.find_one({"product_id": "sunscreen"})
+            fw_avail = fw_inv["available"] if fw_inv else 0
+            ss_avail = ss_inv["available"] if ss_inv else 0
+            document["available_stock"] = min(fw_avail, ss_avail)
+        else:
+            inv = await inventory_collection.find_one({"product_id": prod_id})
+            document["available_stock"] = inv["available"] if inv else 0
         products.append(document)
     return products
 
@@ -381,6 +391,16 @@ async def get_product(slug_or_id: str):
     product = await products_collection.find_one({"$or": [{"id": slug_or_id}, {"slug": slug_or_id}]})
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
+    prod_id = product.get("id")
+    if prod_id == "combo":
+        fw_inv = await inventory_collection.find_one({"product_id": "face-wash"})
+        ss_inv = await inventory_collection.find_one({"product_id": "sunscreen"})
+        fw_avail = fw_inv["available"] if fw_inv else 0
+        ss_avail = ss_inv["available"] if ss_inv else 0
+        product["available_stock"] = min(fw_avail, ss_avail)
+    else:
+        inv = await inventory_collection.find_one({"product_id": prod_id})
+        product["available_stock"] = inv["available"] if inv else 0
     return product
 
 
@@ -396,6 +416,18 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
     order_dict["status"] = "pending"
     order_dict["created_at"] = datetime.now(timezone.utc)
     
+    # Inventory Validation Logic
+    for item in order_in.items:
+        products_to_check = [item.id]
+        if item.id == "combo":
+            products_to_check = ["face-wash", "sunscreen"]
+            
+        for pid in products_to_check:
+            inv = await inventory_collection.find_one({"product_id": pid})
+            available = inv["available"] if inv else 0
+            if available < item.quantity:
+                raise HTTPException(status_code=400, detail=f"Insufficient stock for product: {pid}")
+
     result = await orders_collection.insert_one(order_dict)
     order_dict["_id"] = result.inserted_id
     
@@ -403,7 +435,7 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
     for item in order_in.items:
         products_to_update = [item.id]
         if item.id == "combo":
-            products_to_update.extend(["face-wash", "sunscreen"])
+            products_to_update = ["face-wash", "sunscreen"]
             
         for pid in products_to_update:
             await inventory_collection.update_one(
@@ -647,12 +679,78 @@ async def get_admin_orders(current_user: dict = Depends(get_admin_user)):
         orders.append(document)
     return orders
 
+async def cancel_delhivery_shipment_in_carrier(order: dict):
+    awb = order.get("tracking_number")
+    if not awb:
+        return
+        
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    
+    if not delhivery_token or delhivery_token == "mock_token":
+        print(f"Mock Delhivery Shipment Cancellation for AWB: {awb}")
+        return
+        
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    url = "https://track.delhivery.com/api/p/edit" if delhivery_env == "production" else "https://staging-express.delhivery.com/api/p/edit"
+    
+    payload = {
+        "waybill": awb,
+        "cancellation": True
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
+            if res.status_code != 200:
+                print(f"Delhivery auto-cancellation API returned error: {res.text}")
+    except Exception as e:
+        print(f"Failed to connect to Delhivery API for auto-cancellation: {str(e)}")
+
+async def cancel_order_in_db(order: dict):
+    order_id = str(order["_id"])
+    prev_status = order.get("status", "pending")
+    
+    # 1. Update order in database
+    await orders_collection.update_one(
+        {"_id": order["_id"]},
+        {"$set": {"is_deleted": True, "status": "cancelled"}}
+    )
+    
+    # 2. If prev_status was pending, restore inventory
+    if prev_status == "pending":
+        items = order.get("items", [])
+        for item in items:
+            products_to_update = [item.get("id")]
+            if item.get("id") == "combo":
+                products_to_update.extend(["face-wash", "sunscreen"])
+            
+            for pid in products_to_update:
+                await inventory_collection.update_one(
+                    {"product_id": pid},
+                    {"$inc": {"reserved": -item.get("quantity", 0), "available": item.get("quantity", 0)}}
+                )
+                await inventory_history_collection.insert_one({
+                    "product_id": pid,
+                    "action": "cancelled_webhook",
+                    "pool": "available",
+                    "amount": item.get("quantity", 0),
+                    "reason": f"Delhivery Webhook Order {order.get('order_number')}",
+                    "order_id": order_id,
+                    "created_at": datetime.now(timezone.utc)
+                })
+
 @app.put("/api/admin/orders/{order_id}/soft-delete")
 async def soft_delete_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
-    result = await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$set": {"is_deleted": True}})
-    if result.matched_count == 0:
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+        
+    if order.get("tracking_number"):
+        await cancel_delhivery_shipment_in_carrier(order)
+        
+    await cancel_order_in_db(order)
     return {"message": "Order soft deleted successfully"}
 
 @app.put("/api/admin/orders/{order_id}/restore")
@@ -666,9 +764,37 @@ async def restore_admin_order(order_id: str, current_user: dict = Depends(get_ad
 @app.delete("/api/admin/orders/{order_id}")
 async def hard_delete_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
-    result = await orders_collection.delete_one({"_id": ObjectId(order_id)})
-    if result.deleted_count == 0:
+    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+        
+    if order.get("tracking_number"):
+        await cancel_delhivery_shipment_in_carrier(order)
+        
+    prev_status = order.get("status", "pending")
+    if prev_status == "pending":
+        items = order.get("items", [])
+        for item in items:
+            products_to_update = [item.get("id")]
+            if item.get("id") == "combo":
+                products_to_update.extend(["face-wash", "sunscreen"])
+            
+            for pid in products_to_update:
+                await inventory_collection.update_one(
+                    {"product_id": pid},
+                    {"$inc": {"reserved": -item.get("quantity", 0), "available": item.get("quantity", 0)}}
+                )
+                await inventory_history_collection.insert_one({
+                    "product_id": pid,
+                    "action": "hard_deleted",
+                    "pool": "available",
+                    "amount": item.get("quantity", 0),
+                    "reason": f"Hard Deleted Order {order.get('order_number')}",
+                    "order_id": order_id,
+                    "created_at": datetime.now(timezone.utc)
+                })
+                
+    result = await orders_collection.delete_one({"_id": ObjectId(order_id)})
     return {"message": "Order permanently deleted"}
 
 @app.put("/api/admin/orders/{order_id}/status")
@@ -682,6 +808,10 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
     order = await orders_collection.find_one({"_id": ObjectId(order_id)})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+        
+    if status_val == "cancelled":
+        if order.get("tracking_number"):
+            await cancel_delhivery_shipment_in_carrier(order)
         
     # If shipping, trigger Delhivery shipment booking
     if status_val == "shipped":
@@ -1309,6 +1439,77 @@ async def cancel_delhivery_shipment(order_id: str):
                 raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel shipment: {str(e)}")
+
+@app.post("/api/webhooks/delhivery")
+async def delhivery_webhook(request: Request):
+    try:
+        payload = await request.json()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        
+    print(f"Received Delhivery Webhook: {payload}")
+    
+    # Delhivery payload can be a single dict or a list of scans
+    shipments = []
+    if isinstance(payload, list):
+        shipments = payload
+    elif isinstance(payload, dict):
+        if "Shipment" in payload:
+            shipments = [payload]
+        elif "shipments" in payload and isinstance(payload["shipments"], list):
+            shipments = payload["shipments"]
+        else:
+            shipments = [payload]
+            
+    for item in shipments:
+        # Extract Shipment details
+        shipment_data = item.get("Shipment", item) if isinstance(item, dict) else {}
+        if not isinstance(shipment_data, dict):
+            continue
+            
+        awb = shipment_data.get("AWB") or shipment_data.get("waybill")
+        if not awb:
+            continue
+            
+        # Get status information
+        status_obj = shipment_data.get("Status", {})
+        status_str = ""
+        status_type = ""
+        instructions = ""
+        
+        if isinstance(status_obj, dict):
+            status_str = status_obj.get("Status", "")
+            status_type = status_obj.get("StatusType", "")
+            instructions = status_obj.get("Instructions", "")
+        elif isinstance(status_obj, str):
+            status_str = status_obj
+            
+        # Also check direct status fields in case they are flattened
+        if not status_str:
+            status_str = shipment_data.get("Status", "")
+        if not status_type:
+            status_type = shipment_data.get("StatusType", "")
+            
+        # Check if the status indicates cancellation (CX is the standard Delhivery status code for cancellation)
+        is_cancelled = (
+            status_type.upper() == "CX" or
+            status_str.lower() in ["cancelled", "cancel", "deleted", "delete"] or
+            "cancel" in instructions.lower() or
+            "delete" in instructions.lower()
+        )
+        
+        if is_cancelled:
+            order = await orders_collection.find_one({"tracking_number": awb})
+            if order:
+                if not order.get("is_deleted"):
+                    await cancel_order_in_db(order)
+                    print(f"Order {order.get('order_number')} (AWB: {awb}) soft-deleted via Delhivery Webhook")
+                else:
+                    print(f"Order {order.get('order_number')} (AWB: {awb}) already soft-deleted")
+            else:
+                print(f"Order with Delhivery AWB {awb} not found in database")
+                
+    return {"message": "Webhook processed successfully"}
 
 # --- Reviews Routes ---
 @app.get("/api/products/{product_id}/reviews", response_model=List[ReviewResponse])
