@@ -29,8 +29,9 @@ export const AdminPage = () => {
   // Dashboard Tab state
   // Dashboard Tab state from URL search params
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "overview";
+  const activeTab = searchParams.get("tab") || localStorage.getItem("admin_active_tab") || "overview";
   const setActiveTab = (tabVal) => {
+    localStorage.setItem("admin_active_tab", tabVal);
     setSearchParams({ tab: tabVal });
   };
   const [stats, setStats] = useState({ users: 0, deleted_users: 0, products: 0, orders: 0, deleted_orders: 0, revenue: 0 });
@@ -38,7 +39,13 @@ export const AdminPage = () => {
   const [inventoryList, setInventoryList] = useState([]);
   const [inventoryHistory, setInventoryHistory] = useState([]);
   const [showDeletedOrders, setShowDeletedOrders] = useState(false);
-  const [orderTab, setOrderTab] = useState("All");
+  const [orderTab, setOrderTab] = useState(() => localStorage.getItem("admin_order_tab") || "All");
+  
+  // Custom setter to save to localStorage
+  const handleSetOrderTab = (val) => {
+    localStorage.setItem("admin_order_tab", val);
+    setOrderTab(val);
+  };
   const [searchOrderQuery, setSearchOrderQuery] = useState("");
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [productsList, setProductsList] = useState([]);
@@ -449,7 +456,7 @@ export const AdminPage = () => {
         const contentData = await contentRes.json();
         const contentMap = {};
         contentData.forEach(block => {
-          contentMap[block.key] = block.content;
+          contentMap[block.section_key || block.key] = block.content;
         });
         setContentBlocks(contentMap);
       }
@@ -1423,7 +1430,7 @@ export const AdminPage = () => {
                           {pillTabs.map(tab => (
                             <button 
                               key={tab}
-                              onClick={() => setOrderTab(tab)}
+                              onClick={() => handleSetOrderTab(tab)}
                               className={`px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-semibold whitespace-nowrap transition-colors ${
                                 orderTab === tab 
                                   ? "bg-white text-brand-dark shadow-sm" 
@@ -3523,7 +3530,12 @@ If you haven’t received your order within 7 days of receiving your shipping co
     isActive: true 
   });
   const [showStoryPreview, setShowStoryPreview] = useState(false);
-  const [activeTab, setActiveTab] = useState("hero");
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem("admin_content_tab") || "hero");
+  
+  const handleSetActiveTab = (val) => {
+    localStorage.setItem("admin_content_tab", val);
+    setActiveTab(val);
+  };
 
   const tabs = [
     { id: "hero", label: "Hero Carousel Slides" },
@@ -3619,7 +3631,7 @@ If you haven’t received your order within 7 days of receiving your shipping co
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => handleSetActiveTab(tab.id)}
               className={`w-full text-left px-4 py-3 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === tab.id 
                   ? "bg-brand-dark text-white shadow-md" 
