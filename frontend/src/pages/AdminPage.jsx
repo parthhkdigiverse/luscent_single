@@ -1312,6 +1312,18 @@ export const AdminPage = () => {
                   const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/label`);
                   if (res.ok) {
                     const data = await res.json();
+                    if (data.pdf_base64) {
+                      const byteCharacters = atob(data.pdf_base64);
+                      const byteNumbers = new Array(byteCharacters.length);
+                      for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                      }
+                      const byteArray = new Uint8Array(byteNumbers);
+                      const blob = new Blob([byteArray], {type: 'application/pdf'});
+                      const blobUrl = URL.createObjectURL(blob);
+                      newWindow.location.href = blobUrl;
+                      return;
+                    }
                     const packageData = data.packages && data.packages.length > 0 ? data.packages[0] : null;
                     const url = data.url || (packageData && packageData.pdf_download_link);
                     if (url) {
@@ -1543,10 +1555,16 @@ export const AdminPage = () => {
                                     {o.tracking_number ? (
                                       <div className="flex flex-col gap-2 relative">
                                         <div className="flex items-center gap-3">
-                                          <span className="px-2.5 py-0.5 rounded-md border border-[#cbd8d2] text-[10px] font-bold text-[#4d7d6f] bg-[#e6edeb]">
+                                          <span 
+                                            onClick={() => handleGetLabel(o.id || o._id)}
+                                            className="px-2.5 py-0.5 rounded-md border border-[#cbd8d2] text-[10px] font-bold text-[#4d7d6f] bg-[#e6edeb] cursor-pointer hover:bg-[#d8e2df] transition-colors"
+                                          >
                                             DELHIVERY
                                           </span>
-                                          <span className="text-[10px] font-bold text-[#184976]">
+                                          <span 
+                                            onClick={() => handleGetLabel(o.id || o._id)}
+                                            className="text-[10px] font-bold text-[#184976] cursor-pointer hover:underline"
+                                          >
                                             {o.tracking_number}
                                           </span>
                                         </div>

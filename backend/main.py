@@ -1,6 +1,7 @@
 import os
 import sys
 import random
+import base64
 import httpx
 import asyncio
 from datetime import datetime, timezone
@@ -13,6 +14,8 @@ from bson import ObjectId
 
 # Add the directory containing this file to Python's path so local imports work
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from label_generator import generate_custom_label_pdf
 
 from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -1439,12 +1442,12 @@ async def get_delhivery_label(order_id: str):
             # 1. Try format=pdf
             res_pdf2 = await client.get(url_pdf, headers={"Authorization": f"Token {delhivery_token}", "Accept": "application/pdf"})
             if res_pdf2.status_code == 200 and "application/pdf" in res_pdf2.headers.get("content-type", ""):
-                return {"url": url_pdf}
+                return {"pdf_base64": base64.b64encode(res_pdf2.content).decode("utf-8")}
             
             # 2. Try pdf=True
             res_pdf3 = await client.get(url_pdf_true, headers={"Authorization": f"Token {delhivery_token}", "Accept": "application/pdf"})
             if res_pdf3.status_code == 200 and "application/pdf" in res_pdf3.headers.get("content-type", ""):
-                return {"url": url_pdf_true}
+                return {"pdf_base64": base64.b64encode(res_pdf3.content).decode("utf-8")}
             elif res_pdf3.status_code == 200:
                 json_data = res_pdf3.json()
                 if "packages" in json_data and len(json_data["packages"]) > 0 and json_data["packages"][0].get("pdf_download_link"):
@@ -1462,8 +1465,13 @@ async def get_delhivery_label(order_id: str):
             res = await client.get(url, headers={"Authorization": f"Token {delhivery_token}"})
             if res.status_code == 200:
                 json_data = res.json()
-                json_data["debug_errors"] = errors
-                return json_data
+                # Generate custom PDF from JSON data since Delhivery didn't provide a PDF
+                try:
+                    pdf_base64 = generate_custom_label_pdf(order, json_data)
+                    return {"pdf_base64": pdf_base64}
+                except Exception as e:
+                    json_data["debug_errors"] = errors + [f"Custom PDF Error: {str(e)}"]
+                    return json_data
             else:
                 raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text} | Errors: {errors}")
     except httpx.RequestError as e:
