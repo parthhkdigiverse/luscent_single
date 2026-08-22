@@ -5,7 +5,7 @@ import { useAuth } from "../context/AuthContext";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
 import { CheckoutStepper } from "../components/CheckoutStepper";
-import { CreditCard, Truck, CheckCircle2, ChevronRight, MapPin, ClipboardList, ShieldAlert, ShieldCheck } from "lucide-react";
+import { CreditCard, Truck, ChevronRight, MapPin, ClipboardList, ShieldAlert, ShieldCheck } from "lucide-react";
 
 export const CheckoutPage = () => {
   const { cart, cartTotal, clearCart } = useCart();
@@ -20,11 +20,10 @@ export const CheckoutPage = () => {
     const orderIdParam = searchParams.get("order_id");
     const stepParam = searchParams.get("step");
     if (stepParam === "4" && orderIdParam) {
-      setOrderId(orderIdParam);
-      setStep(4);
       clearCart();
+      navigate(`/thank-you?order_id=${orderIdParam}`, { replace: true });
     }
-  }, [searchParams]);
+  }, [searchParams, navigate, clearCart]);
   const [checkoutAsGuest, setCheckoutAsGuest] = useState(false);
 
   // Form details
@@ -353,8 +352,8 @@ export const CheckoutPage = () => {
 
           if (sessionData.is_mock) {
             alert("Launching Razorpay Sandbox Checkout (Simulated Mode)... Click OK to simulate successful payment!");
-            setStep(4);
             clearCart();
+            navigate(`/thank-you?order_id=${orderNum}`);
             return;
           }
 
@@ -369,7 +368,7 @@ export const CheckoutPage = () => {
               alert("Payment successful! Razorpay Payment ID: " + response.razorpay_payment_id);
               // Clean cart and redirect
               clearCart();
-              navigate(`/checkout?step=4&order_id=${orderNum}`);
+              navigate(`/thank-you?order_id=${orderNum}`);
             },
             prefill: {
               name: name,
@@ -409,7 +408,7 @@ export const CheckoutPage = () => {
               phone: phone,
               email: user?.email || "guest@luscentglow.com",
               order_id: orderNum,
-              return_url: `${window.location.origin}/checkout?step=4&order_id=${orderNum}`
+              return_url: `${window.location.origin}/thank-you?order_id=${orderNum}`
             })
           });
 
@@ -418,8 +417,8 @@ export const CheckoutPage = () => {
 
           if (sessionData.is_mock) {
             alert("Launching Cashfree Sandbox Gateway Checkout (Simulated Mode)... Click OK to simulate successful payment!");
-            setStep(4);
             clearCart();
+            navigate(`/thank-you?order_id=${orderNum}`);
             return;
           }
 
@@ -437,64 +436,20 @@ export const CheckoutPage = () => {
       }
     } else {
       // Cash on Delivery
-      await submitOrderToBackend(orderData);
-      setStep(4);
+      const orderNum = await submitOrderToBackend(orderData);
       clearCart();
+      navigate(`/thank-you?order_id=${orderNum}`);
     }
   };
 
-  // If cart is empty and we are not in confirmation step, redirect
-  if (cart.length === 0 && step < 4) {
+  // If cart is empty, redirect
+  if (cart.length === 0) {
     return (
       <div className="pt-32 pb-16 text-center">
         <h2 className="font-serif text-xl font-bold text-brand-dark mb-4">No items to checkout</h2>
         <Link to="/">
           <Button variant="primary">Return Home</Button>
         </Link>
-      </div>
-    );
-  }
-
-
-
-  // Confirmation view
-  if (step === 4) {
-    return (
-      <div className="pt-28 pb-20 px-6 max-w-xl mx-auto text-center space-y-8 animate-fade-in">
-        <div className="bg-white rounded-3xl border border-brand-card/50 shadow-xl p-8 md:p-12 space-y-6">
-          <div className="w-16 h-16 rounded-full bg-brand-green/10 text-brand-green flex items-center justify-center mx-auto">
-            <CheckCircle2 size={36} className="stroke-[2.5]" />
-          </div>
-
-          <div className="space-y-2">
-            <span className="text-[10px] tracking-widest uppercase font-bold text-brand-green block">ORDER PLACED SUCCESSFULLY</span>
-            <h2 className="font-serif text-2xl md:text-3xl font-medium text-brand-dark">Thank You for Your Order!</h2>
-            <p className="text-xs text-brand-grey">Your transaction was secure. A confirmation email has been sent to you.</p>
-          </div>
-
-          <div className="bg-brand-bg rounded-2xl p-5 border border-brand-card/30 text-left space-y-2 text-xs">
-            <div className="flex justify-between">
-              <span className="text-brand-grey">Order Number</span>
-              <span className="font-semibold text-brand-dark">{orderId}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-grey">Estimated Delivery</span>
-              <span className="font-semibold text-brand-dark">3 - 5 Business Days</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-brand-grey">Shipping Method</span>
-              <span className="font-semibold text-brand-dark">Standard Free Shipping</span>
-            </div>
-          </div>
-
-          <div className="pt-4">
-            <Link to="/">
-              <Button variant="primary" className="w-full py-3 text-xs uppercase tracking-wider">
-                Continue Shopping
-              </Button>
-            </Link>
-          </div>
-        </div>
       </div>
     );
   }

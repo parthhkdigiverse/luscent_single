@@ -12,6 +12,7 @@ import { HomePage } from "./pages/HomePage";
 import { ProductPage } from "./pages/ProductPage";
 import { CartPage } from "./pages/CartPage";
 import { CheckoutPage } from "./pages/CheckoutPage";
+import { ThankYouPage } from "./pages/ThankYouPage";
 import { AuthPage } from "./pages/AuthPage";
 import { OurStoryPage } from "./pages/OurStoryPage";
 import { FAQPage } from "./pages/FAQPage";
@@ -50,6 +51,7 @@ const AppContent = () => {
           <Route path="/product/:slug" element={<ProductPage />} />
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/thank-you" element={<ThankYouPage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/our-story" element={<OurStoryPage />} />
           <Route path="/faq" element={<FAQPage />} />
