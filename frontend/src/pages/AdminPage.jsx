@@ -3668,7 +3668,10 @@ If you haven’t received your order within 7 days of receiving your shipping co
               <div><label className={labelClass}>Tag / Badge</label><input type="text" value={slide.tag} onChange={(e) => updateHeroSlide(idx, "tag", e.target.value)} placeholder="e.g. SPF 50+ PA++++" className={inputClass} /></div>
               <div><label className={labelClass}>Link URL</label><input type="text" value={slide.link} onChange={(e) => updateHeroSlide(idx, "link", e.target.value)} placeholder="/product/sunscreen" className={inputClass} /></div>
             </div>
-            <div><label className={labelClass}>Title</label><input type="text" value={slide.title} onChange={(e) => updateHeroSlide(idx, "title", e.target.value)} className={inputClass} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className={labelClass}>Title</label><input type="text" value={slide.title} onChange={(e) => updateHeroSlide(idx, "title", e.target.value)} className={inputClass} /></div>
+              <div><label className={labelClass}>CTA Button Text</label><input type="text" value={slide.ctaText || ""} onChange={(e) => updateHeroSlide(idx, "ctaText", e.target.value)} placeholder="Shop Now" className={inputClass} /></div>
+            </div>
             <div><label className={labelClass}>Description</label><textarea rows={2} value={slide.desc} onChange={(e) => updateHeroSlide(idx, "desc", e.target.value)} className={inputClass + " resize-none"} /></div>
             <ImageUploader label="Slide Image" value={slide.image} onChange={(val) => updateHeroSlide(idx, "image", val)} />
           </div>

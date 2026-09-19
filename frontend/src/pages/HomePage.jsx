@@ -21,7 +21,8 @@ const defaultHeroSlides = [
     title: "Powerful Protection. Effortless Glow.",
     desc: "Weightless, non-greasy sunscreen that blocks UV rays while treating dark spots. Powered by 2% Niacinamide & Zinc Oxide.",
     image: "/images/sunscreen_banner.png",
-    link: "/product/sunscreen"
+    link: "/product/sunscreen",
+    ctaText: "Shop Now"
   },
   {
     id: "face-wash",
@@ -29,7 +30,8 @@ const defaultHeroSlides = [
     title: "Gentle Cleanse. Radiant Skin.",
     desc: "Exfoliates pores, controls breakouts, and fades dark spots with Salicylic Acid & Niacinamide.",
     image: "/images/sunscreen_beach_banner.jpg",
-    link: "/product/face-wash"
+    link: "/product/face-wash",
+    ctaText: "Shop Now"
   },
   {
     id: "combo",
@@ -37,7 +39,8 @@ const defaultHeroSlides = [
     title: "Ultimate Skin Defense Duo.",
     desc: "Maximum sun protection combined with a deep brightening cleanse. Get our bestselling duo and save ₹86.",
     image: "/images/hero_banner.png",
-    link: "/product/combo"
+    link: "/product/combo",
+    ctaText: "Shop Now"
   }
 ];
 
@@ -46,7 +49,10 @@ export const HomePage = () => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingContent, setLoadingContent] = useState(true);
   const [heroSlides, setHeroSlides] = useState(defaultHeroSlides);
-  const [bannerText, setBannerText] = useState({ title: "Powerful Protection. Effective Gentle Care.", subtitle: "We focus on formulation efficacy. Minimal products, maximal results. Discover our daily essential routine." });
+  const [bannerText, setBannerText] = useState({ 
+    title: "Healthy Skin Starts with the Right Essentials.", 
+    subtitle: "Discover thoughtfully formulated skincare powered by effective ingredients to cleanse, protect, and nourish your skin. From deep cleansing to daily SPF protection, Luscent Glow helps you achieve healthy-looking, radiant skin—every day." 
+  });
   const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
   const [faqList, setFaqList] = useState(staticFaqs);
   const [beforeImage, setBeforeImage] = useState("/before-skin.png");
@@ -164,22 +170,44 @@ export const HomePage = () => {
               }}
             />
             {/* Elegant Text Overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6">
-              {heroSlides[activeSlide].tag && (
-                <span className="text-white/90 text-xs md:text-sm font-bold tracking-[0.2em] uppercase mb-4 md:mb-6 bg-black/20 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
-                  {heroSlides[activeSlide].tag}
-                </span>
-              )}
-              {heroSlides[activeSlide].title && (
-                <h2 className="text-white text-3xl md:text-5xl lg:text-7xl font-serif max-w-4xl leading-tight mb-4 md:mb-6 drop-shadow-lg">
-                  {heroSlides[activeSlide].title}
-                </h2>
-              )}
-              {heroSlides[activeSlide].desc && (
-                <p className="text-white/90 text-sm md:text-lg lg:text-xl max-w-2xl font-light drop-shadow-md">
-                  {heroSlides[activeSlide].desc}
-                </p>
-              )}
+            <div className="absolute inset-0 flex flex-col items-start justify-end text-left px-8 md:px-16 lg:px-24 pb-10 md:pb-16 lg:pb-20">
+              <div className="max-w-xl md:max-w-2xl">
+                {heroSlides[activeSlide].tag && (
+                  <span className="inline-block text-white/90 text-xs md:text-sm font-bold tracking-[0.2em] uppercase mb-2 md:mb-3 bg-black/30 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
+                    {heroSlides[activeSlide].tag}
+                  </span>
+                )}
+                {heroSlides[activeSlide].title && (
+                  <h2 className="text-white text-3xl md:text-5xl lg:text-6xl font-serif leading-tight mb-2 md:mb-3 drop-shadow-lg">
+                    {heroSlides[activeSlide].title}
+                  </h2>
+                )}
+                {heroSlides[activeSlide].desc && (
+                  <p className="text-white/90 text-sm md:text-lg lg:text-xl font-light drop-shadow-md mb-3 md:mb-5">
+                    {heroSlides[activeSlide].desc}
+                  </p>
+                )}
+                {/* CTA Button (Positioned in Lower-Left) */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const targetEl = document.getElementById("our-essentials");
+                      if (targetEl) {
+                        targetEl.scrollIntoView({ behavior: "smooth" });
+                      } else if (heroSlides[activeSlide]?.link) {
+                        window.location.href = heroSlides[activeSlide].link;
+                      }
+                    }}
+                    className="inline-flex items-center gap-2.5 px-7 py-3 md:px-9 md:py-3.5 bg-brand-accent text-white font-bold text-xs md:text-sm uppercase tracking-widest rounded-full shadow-2xl hover:bg-brand-dark transition-all duration-300 transform group-hover:scale-105 cursor-pointer"
+                  >
+                    <span>{heroSlides[activeSlide].ctaText || "Shop Now"}</span>
+                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                  </button>
+                </div>
+              </div>
             </div>
           </Link>
 
@@ -219,7 +247,7 @@ export const HomePage = () => {
       )}
 
       {/* 3. Shop by Product */}
-      <section className="max-w-7xl mx-auto px-6 mt-24">
+      <section id="our-essentials" className="max-w-7xl mx-auto px-6 mt-24 scroll-mt-24">
         <div className="text-center max-w-2xl mx-auto mb-16">
           <span className="text-[10px] tracking-widest uppercase font-semibold text-brand-grey mb-2 block">
             OUR ESSENTIALS

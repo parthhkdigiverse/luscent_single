@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart, CheckCircle2, Award, DropletOff, Leaf } from "lucide-react";
+import { ArrowLeft, ShoppingBag, Check, ShieldCheck, Heart, AlertCircle, ShoppingCart, CheckCircle2, Truck, RotateCcw } from "lucide-react";
 import { Button } from "../components/Button";
 import { RatingStars } from "../components/RatingStars";
 import { ProductGallery } from "../components/ProductGallery";
@@ -9,7 +9,6 @@ import { HowToUseSteps } from "../components/HowToUseSteps";
 import { IngredientAccordion } from "../components/IngredientAccordion";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { useCart } from "../context/CartContext";
-import { TrustBadgeStrip } from "../components/TrustBadgeStrip";
 import { API_URL } from "../config";
 
 export const ProductPage = () => {
@@ -254,34 +253,29 @@ export const ProductPage = () => {
           <div className="grid grid-cols-3 gap-4 pt-6 pb-2 border-t border-brand-card/40">
             <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
               <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
-                <Award size={18} className="stroke-[1.5]" />
+                <Truck size={18} className="stroke-[1.5]" />
               </div>
-              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Dermat Tested</span>
-              <span className="text-[9px] text-brand-grey mt-0.5">Clinically Safe</span>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Free Shipping</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">On All Orders</span>
             </div>
             
             <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
               <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
-                <DropletOff size={18} className="stroke-[1.5]" />
+                <RotateCcw size={18} className="stroke-[1.5]" />
               </div>
-              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Fragrance Free</span>
-              <span className="text-[9px] text-brand-grey mt-0.5">Zero Perfumes</span>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Easy Return / Exchange</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">7 Days Policy</span>
             </div>
 
             <div className="flex flex-col items-center text-center p-3 rounded-2xl bg-brand-bg/30 border border-brand-card/30 hover:border-brand-dark transition duration-300">
               <div className="w-10 h-10 rounded-full bg-brand-card/85 flex items-center justify-center text-brand-dark mb-2 shadow-sm">
-                <Leaf size={18} className="stroke-[1.5]" />
+                <ShieldCheck size={18} className="stroke-[1.5]" />
               </div>
-              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Clean Source</span>
-              <span className="text-[9px] text-brand-grey mt-0.5">100% Ethical</span>
+              <span className="text-[9px] uppercase tracking-wider font-bold text-brand-dark">Secure Payment</span>
+              <span className="text-[9px] text-brand-grey mt-0.5">100% Protected</span>
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Trust Badges Strip */}
-      <div className="border-t border-brand-card/30 pt-8">
-        <TrustBadgeStrip />
       </div>
 
       {/* Accordion / Tabs Details */}
