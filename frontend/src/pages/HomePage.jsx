@@ -108,8 +108,17 @@ export const HomePage = () => {
   const combo = productList.find(p => p.id === "combo");
 
   const [activeSlide, setActiveSlide] = useState(0);
+  const [slideRatios, setSlideRatios] = useState({});
 
-
+  const handleImageLoad = (idx, e) => {
+    const { naturalWidth, naturalHeight } = e.target;
+    if (naturalWidth && naturalHeight) {
+      setSlideRatios((prev) => ({
+        ...prev,
+        [idx]: naturalWidth / naturalHeight,
+      }));
+    }
+  };
 
   // Get first 3 FAQs for preview
   const faqPreview = faqList && faqList.length > 0 && faqList[0].questions
@@ -147,11 +156,16 @@ export const HomePage = () => {
     return <Loader />;
   }
 
+  const activeRatio = slideRatios[activeSlide] || (activeSlide === 0 ? 2.4 : 1.79);
+
   return (
     <div className="pt-20 pb-12 overflow-x-hidden">
       {/* 1. Full-Screen Widescreen Hero Banner (Slideshow) */}
       <section className="w-full">
-        <div className="relative w-full overflow-hidden aspect-[21/9] bg-brand-bg">
+        <div 
+          className="relative w-full overflow-hidden md:aspect-[21/9] bg-brand-bg transition-[aspect-ratio] duration-300"
+          style={{ aspectRatio: activeRatio }}
+        >
           {/* Active Banner Slide */}
           <Link
             to={heroSlides[activeSlide].link}
@@ -161,6 +175,7 @@ export const HomePage = () => {
             <img
               src={heroSlides[activeSlide].image}
               alt={heroSlides[activeSlide].title}
+              onLoad={(e) => handleImageLoad(activeSlide, e)}
               className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
               onError={(e) => {
                 // Fallback placeholder showing title if graphic file is not yet generated
@@ -170,20 +185,20 @@ export const HomePage = () => {
               }}
             />
             {/* Elegant Text Overlay */}
-            <div className="absolute inset-0 flex flex-col items-start justify-end text-left px-8 md:px-16 lg:px-24 pb-10 md:pb-16 lg:pb-20">
-              <div className="max-w-xl md:max-w-2xl">
+            <div className="absolute inset-0 flex flex-col items-start justify-end text-left px-5 sm:px-8 md:px-16 lg:px-24 pb-3 sm:pb-8 md:pb-16 lg:pb-20 z-10">
+              <div className="max-w-[85%] sm:max-w-xl md:max-w-2xl">
                 {heroSlides[activeSlide].tag && (
-                  <span className="inline-block text-white/90 text-xs md:text-sm font-bold tracking-[0.2em] uppercase mb-2 md:mb-3 bg-black/30 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/10">
+                  <span className="inline-block text-white/90 text-[9px] sm:text-xs md:text-sm font-bold tracking-[0.15em] sm:tracking-[0.2em] uppercase mb-1 sm:mb-2 md:mb-3 bg-black/40 px-2.5 py-0.5 sm:px-4 sm:py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-sm">
                     {heroSlides[activeSlide].tag}
                   </span>
                 )}
                 {heroSlides[activeSlide].title && (
-                  <h2 className="text-white text-3xl md:text-5xl lg:text-6xl font-serif leading-tight mb-2 md:mb-3 drop-shadow-lg">
+                  <h2 className="text-white text-base sm:text-3xl md:text-5xl lg:text-6xl font-serif leading-tight mb-1 sm:mb-2 md:mb-3 drop-shadow-lg">
                     {heroSlides[activeSlide].title}
                   </h2>
                 )}
                 {heroSlides[activeSlide].desc && (
-                  <p className="text-white/90 text-sm md:text-lg lg:text-xl font-light drop-shadow-md mb-3 md:mb-5">
+                  <p className="text-white/90 text-[10px] sm:text-sm md:text-lg lg:text-xl font-light drop-shadow-md mb-1.5 sm:mb-3 md:mb-5 line-clamp-2 sm:line-clamp-none">
                     {heroSlides[activeSlide].desc}
                   </p>
                 )}
@@ -201,10 +216,10 @@ export const HomePage = () => {
                         window.location.href = heroSlides[activeSlide].link;
                       }
                     }}
-                    className="inline-flex items-center gap-2.5 px-7 py-3 md:px-9 md:py-3.5 bg-brand-accent text-white font-bold text-xs md:text-sm uppercase tracking-widest rounded-full shadow-2xl hover:bg-brand-dark transition-all duration-300 transform group-hover:scale-105 cursor-pointer"
+                    className="inline-flex items-center gap-1 sm:gap-2.5 px-2.5 py-1 sm:px-7 sm:py-3 md:px-9 md:py-3.5 bg-brand-accent text-white font-bold text-[9px] sm:text-xs md:text-sm uppercase tracking-wider sm:tracking-widest rounded-full shadow-md md:shadow-2xl hover:bg-brand-dark transition-all duration-300 transform group-hover:scale-105 cursor-pointer"
                   >
                     <span>{heroSlides[activeSlide].ctaText || "Shop Now"}</span>
-                    <ArrowRight className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1" />
+                    <ArrowRight className="w-2.5 h-2.5 sm:w-4 sm:h-4 transition-transform duration-300 group-hover:translate-x-1" />
                   </button>
                 </div>
               </div>
@@ -212,13 +227,14 @@ export const HomePage = () => {
           </Link>
 
           {/* Dots Indicator Centered at the Bottom */}
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+          <div className="absolute bottom-2 sm:bottom-4 md:bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 sm:gap-2 z-20">
             {heroSlides.map((_, idx) => (
               <button
                 key={idx}
                 onClick={() => setActiveSlide(idx)}
-                className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${activeSlide === idx ? "bg-brand-dark w-6" : "bg-brand-dark/20 hover:bg-brand-dark/50"
-                  }`}
+                className={`h-1.5 sm:h-2.5 rounded-full transition-all duration-300 ${
+                  activeSlide === idx ? "bg-brand-dark w-4 sm:w-6" : "bg-brand-dark/30 hover:bg-brand-dark/60 w-1.5 sm:w-2.5"
+                }`}
                 title={`Go to slide ${idx + 1}`}
               />
             ))}
