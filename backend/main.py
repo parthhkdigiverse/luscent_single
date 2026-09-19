@@ -1635,6 +1635,16 @@ async def get_all_reviews(current_admin: dict = Depends(get_admin_user)):
 @app.post("/api/admin/reviews", response_model=ReviewResponse)
 async def admin_create_review(review: dict, current_admin: dict = Depends(get_admin_user)):
     # Admin can add a manual review
+    created_at_val = datetime.now(timezone.utc)
+    if review.get("created_at"):
+        try:
+            if isinstance(review["created_at"], str):
+                created_at_val = datetime.fromisoformat(review["created_at"].replace("Z", "+00:00"))
+            else:
+                created_at_val = review["created_at"]
+        except Exception:
+            pass
+
     new_review = {
         "product_id": review.get("product_id"),
         "order_id": review.get("order_id", "admin_added"),
@@ -1645,7 +1655,7 @@ async def admin_create_review(review: dict, current_admin: dict = Depends(get_ad
         "title": review.get("title", ""),
         "comment": review.get("comment", ""),
         "images": review.get("images", []),
-        "created_at": datetime.now(timezone.utc)
+        "created_at": created_at_val
     }
     result = await reviews_collection.insert_one(new_review)
     new_review["_id"] = result.inserted_id
@@ -1873,31 +1883,36 @@ async def get_product_reviews(product_id: str):
         reviews.append(doc)
     return reviews
 
-@app.get("/api/admin/reviews", response_model=List[ReviewResponse])
-async def get_all_reviews(current_user: dict = Depends(get_admin_user)):
-    cursor = reviews_collection.find().sort("created_at", -1)
-    reviews = []
-    async for doc in cursor:
-        reviews.append(doc)
-    return reviews
-
-@app.put("/api/admin/reviews/{review_id}", response_model=ReviewResponse)
-async def update_review(review_id: str, review_in: ReviewUpdate, current_user: dict = Depends(get_admin_user)):
+@app.put("/api/admin/reviews/{review_id}")
+async def update_review(review_id: str, review_in: dict, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
-    try:
-        obj_id = ObjectId(review_id)
-    except:
-        obj_id = review_id
-        
-    existing_review = await reviews_collection.find_one({"_id": obj_id})
+    
+    query = {"$or": []}
+    if ObjectId.is_valid(review_id):
+        query["$or"].append({"_id": ObjectId(review_id)})
+    query["$or"].append({"_id": review_id})
+    query["$or"].append({"id": review_id})
+    
+    existing_review = await reviews_collection.find_one(query)
     if not existing_review:
         raise HTTPException(status_code=404, detail="Review not found")
         
-    update_data = {k: v for k, v in review_in.dict().items() if v is not None}
+    update_data = {k: v for k, v in review_in.items() if v is not None}
+    if "created_at" in update_data and update_data["created_at"]:
+        try:
+            ca = update_data["created_at"]
+            if isinstance(ca, str):
+                ca_clean = ca.replace("Z", "+00:00")
+                if "T" not in ca_clean:
+                    ca_clean += "T12:00:00+00:00"
+                update_data["created_at"] = datetime.fromisoformat(ca_clean)
+        except Exception as e:
+            print("Error parsing created_at:", e)
+
     if update_data:
-        await reviews_collection.update_one({"_id": obj_id}, {"$set": update_data})
+        await reviews_collection.update_one({"_id": existing_review["_id"]}, {"$set": update_data})
         
-    updated_review = await reviews_collection.find_one({"_id": obj_id})
+    updated_review = await reviews_collection.find_one({"_id": existing_review["_id"]})
     
     # Recalculate average rating for target products
     target_product_ids = set([existing_review.get("product_id"), updated_review.get("product_id")])
@@ -1906,17 +1921,14 @@ async def update_review(review_id: str, review_in: ReviewUpdate, current_user: d
             cursor = reviews_collection.find({"product_id": pid})
             reviews = [r async for r in cursor]
             if reviews:
-                avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+                avg_rating = sum(r.get("rating", 5) for r in reviews) / len(reviews)
                 await products_collection.update_one(
-                    {"id": pid},
+                    {"$or": [{"id": pid}, {"_id": ObjectId(pid) if ObjectId.is_valid(pid) else "invalid"}]},
                     {"$set": {"rating": round(avg_rating, 1)}}
                 )
-            else:
-                await products_collection.update_one(
-                    {"id": pid},
-                    {"$set": {"rating": 5.0}}
-                )
                 
+    if "_id" in updated_review:
+        updated_review["_id"] = str(updated_review["_id"])
     return updated_review
 
 @app.delete("/api/admin/reviews/{review_id}")

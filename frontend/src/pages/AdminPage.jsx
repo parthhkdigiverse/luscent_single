@@ -4,7 +4,7 @@ import {
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
   TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare,
   LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star,
-  Mail, Send
+  Mail, Send, ChevronDown, ChevronUp
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -126,7 +126,6 @@ export const AdminPage = () => {
   const [prodBadge, setProdBadge] = useState("");
   const [prodTheme, setProdTheme] = useState("brand-accent");
   const [prodCategory, setProdCategory] = useState("sunscreen");
-  const [prodActives, setProdActives] = useState("");
   const [prodFaqs, setProdFaqs] = useState([]);
 
   // Review Admin Form Dialog State
@@ -138,17 +137,24 @@ export const AdminPage = () => {
   const [adminReviewTitle, setAdminReviewTitle] = useState("");
   const [adminReviewComment, setAdminReviewComment] = useState("");
   const [adminReviewImages, setAdminReviewImages] = useState([]);
+  const [adminReviewDate, setAdminReviewDate] = useState("");
   const [submittingAdminReview, setSubmittingAdminReview] = useState(false);
   const [zoomReviewImage, setZoomReviewImage] = useState(null);
   const [reviewSearchQuery, setReviewSearchQuery] = useState("");
   const [reviewRatingFilter, setReviewRatingFilter] = useState("all");
+  const [prodDescription, setProdDescription] = useState("");
   const [prodBenefits, setProdBenefits] = useState("");
   const [prodHowToUse, setProdHowToUse] = useState("");
   const [prodIngredients, setProdIngredients] = useState("");
   const [prodTags, setProdTags] = useState("");
   const [prodImages, setProdImages] = useState([]);
+  const [openProdFaqIndex, setOpenProdFaqIndex] = useState(null);
+  const [openCmsFaqIndex, setOpenCmsFaqIndex] = useState(null);
 
-  const addProdFAQ = () => setProdFaqs([...prodFaqs, { question: "", answer: "" }]);
+  const addProdFAQ = () => {
+    setProdFaqs([...prodFaqs, { question: "", answer: "" }]);
+    setOpenProdFaqIndex(prodFaqs.length);
+  };
   const removeProdFAQ = (idx) => setProdFaqs(prodFaqs.filter((_, i) => i !== idx));
   const updateProdFAQ = (idx, field, value) => {
     const copy = [...prodFaqs];
@@ -571,15 +577,15 @@ export const AdminPage = () => {
     setProdOriginalPrice(p.originalPrice || "");
     setProdNetVolume(p.netVolume);
     setProdSubtitle(p.subtitle);
+    setProdDescription(p.description || "");
     setProdBadge(p.badge || "");
     setProdTheme(p.themeColor || "brand-accent");
     setProdCategory(p.category || "sunscreen");
-    setProdActives(p.keyActives.join(", "));
-    setProdBenefits(p.benefits.join(", "));
-    setProdHowToUse(p.howToUse.join(", "));
+    setProdBenefits(p.benefits ? p.benefits.join(", ") : "");
+    setProdHowToUse(p.howToUse ? p.howToUse.join(", ") : "");
     setProdFaqs(p.faqs || []);
-    setProdIngredients(p.ingredients);
-    setProdTags(p.tags.join(", "));
+    setProdIngredients(p.ingredients || "");
+    setProdTags(p.tags ? p.tags.join(", ") : "");
     setProdImages(p.images || []);
     setShowProductModal(true);
   };
@@ -593,10 +599,10 @@ export const AdminPage = () => {
     setProdOriginalPrice("");
     setProdNetVolume("");
     setProdSubtitle("");
+    setProdDescription("");
     setProdBadge("");
     setProdTheme("brand-accent");
     setProdCategory("sunscreen");
-    setProdActives("");
     setProdBenefits("");
     setProdHowToUse("");
     setProdFaqs([]);
@@ -763,15 +769,16 @@ export const AdminPage = () => {
       savings: (prodOriginalPrice && prodPrice) ? (parseFloat(prodOriginalPrice) - parseFloat(prodPrice)) : null,
       netVolume: prodNetVolume,
       subtitle: prodSubtitle,
+      description: prodDescription || null,
       badge: prodBadge || null,
       category: prodCategory,
       themeColor: prodTheme,
-      keyActives: prodActives.split(",").map(s => s.trim()).filter(Boolean),
-      benefits: prodBenefits.split(",").map(s => s.trim()).filter(Boolean),
-      howToUse: prodHowToUse.split(",").map(s => s.trim()).filter(Boolean),
+      keyActives: [],
+      benefits: prodBenefits ? prodBenefits.split(/[\n,]/).map(s => s.trim()).filter(Boolean) : [],
+      howToUse: prodHowToUse ? prodHowToUse.split(/[\n,]/).map(s => s.trim()).filter(Boolean) : [],
       ingredients: prodIngredients,
       faqs: prodFaqs,
-      tags: prodTags.split(",").map(s => s.trim()).filter(Boolean),
+      tags: prodTags ? prodTags.split(/[\n,]/).map(s => s.trim()).filter(Boolean) : [],
       images: prodImages.length > 0 ? prodImages : [
         `/images/${prodId}.png`,
         `/images/${prodId}_back.png`
@@ -816,6 +823,29 @@ export const AdminPage = () => {
     }
   };
 
+  const formatReviewDateForInput = (dateStr) => {
+    if (!dateStr) {
+      const now = new Date();
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - tzOffset).toISOString().slice(0, 10);
+    }
+    try {
+      const s = String(dateStr);
+      const d = new Date(s.includes("T") ? (s.endsWith("Z") ? s : s + "Z") : s + "T12:00:00Z");
+      if (isNaN(d.getTime())) {
+        const now = new Date();
+        const tzOffset = now.getTimezoneOffset() * 60000;
+        return new Date(now.getTime() - tzOffset).toISOString().slice(0, 10);
+      }
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      return new Date(d.getTime() - tzOffset).toISOString().slice(0, 10);
+    } catch (err) {
+      const now = new Date();
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - tzOffset).toISOString().slice(0, 10);
+    }
+  };
+
   const handleOpenAddReviewModal = () => {
     setEditingAdminReview(null);
     setAdminReviewProductId(productsList[0]?.id || "sunscreen");
@@ -824,6 +854,7 @@ export const AdminPage = () => {
     setAdminReviewTitle("");
     setAdminReviewComment("");
     setAdminReviewImages([]);
+    setAdminReviewDate(formatReviewDateForInput());
     setShowAdminReviewModal(true);
   };
 
@@ -835,6 +866,7 @@ export const AdminPage = () => {
     setAdminReviewTitle(review.title || "");
     setAdminReviewComment(review.comment || "");
     setAdminReviewImages(review.images || []);
+    setAdminReviewDate(formatReviewDateForInput(review.created_at));
     setShowAdminReviewModal(true);
   };
 
@@ -847,7 +879,8 @@ export const AdminPage = () => {
       rating: adminReviewRating,
       title: adminReviewTitle,
       comment: adminReviewComment,
-      images: adminReviewImages
+      images: adminReviewImages,
+      created_at: adminReviewDate ? new Date(adminReviewDate + "T12:00:00Z").toISOString() : new Date().toISOString()
     };
 
     try {
@@ -860,7 +893,7 @@ export const AdminPage = () => {
           body: JSON.stringify(payload)
         });
       } else {
-        res = await fetchAuth(`${API_URL}/api/reviews`, {
+        res = await fetchAuth(`${API_URL}/api/admin/reviews`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
@@ -875,6 +908,7 @@ export const AdminPage = () => {
         setAdminReviewTitle("");
         setAdminReviewComment("");
         setAdminReviewImages([]);
+        setAdminReviewDate("");
       } else {
         const errData = await res.json().catch(() => ({}));
         alert(errData.detail || "Failed to save review");
@@ -2199,7 +2233,7 @@ export const AdminPage = () => {
                           {filteredReviews.map((review) => (
                             <tr key={review._id || review.id} className="hover:bg-brand-bg/30 transition">
                               <td className="p-5 text-brand-grey whitespace-nowrap">
-                                {review.created_at ? new Date(review.created_at.endsWith("Z") ? review.created_at : review.created_at + "Z").toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: true }) : "N/A"}
+                                {review.created_at ? new Date(review.created_at.endsWith("Z") ? review.created_at : review.created_at + "Z").toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric" }) : "N/A"}
                               </td>
                               <td className="p-5 font-medium text-brand-dark">
                                 <span className="inline-block px-2.5 py-1 bg-brand-bg rounded-lg text-xs font-semibold border border-brand-card/30">
@@ -2573,6 +2607,15 @@ export const AdminPage = () => {
                   ></textarea>
                 </div>
                 <div>
+                  <label className="font-semibold block mb-1">Review Date</label>
+                  <input
+                    type="date"
+                    value={adminReviewDate}
+                    onChange={(e) => setAdminReviewDate(e.target.value)}
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark text-xs font-medium cursor-pointer"
+                  />
+                </div>
+                <div>
                   <label className="font-semibold block mb-1">Images (Optional, up to 3)</label>
                   <div className="flex flex-wrap gap-3 mb-1">
                     {adminReviewImages.map((imgStr, idx) => (
@@ -2776,16 +2819,16 @@ export const AdminPage = () => {
                 </div>
 
                 <div>
-                  <label className="font-semibold block mb-1">Key Actives (Comma separated)</label>
-                  <input
-                    type="text"
-                    value={prodActives}
-                    onChange={(e) => setProdActives(e.target.value)}
-                    placeholder="Salicylic Acid, Niacinamide, Alpha Arbutin"
-                    required
-                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark focus:bg-white"
+                  <label className="font-semibold block mb-1">Full Description (Tab content)</label>
+                  <textarea
+                    value={prodDescription}
+                    onChange={(e) => setProdDescription(e.target.value)}
+                    placeholder="Detailed explanation for the Description tab on the product page..."
+                    rows={3}
+                    className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-xl focus:outline-none focus:border-brand-dark focus:bg-white resize-none"
                   />
                 </div>
+
 
                 <div>
                   <label className="font-semibold block mb-1">Benefits (Comma separated)</label>
@@ -2824,7 +2867,7 @@ export const AdminPage = () => {
                 </div>
 
                 <div>
-                  <label className="font-semibold block mb-1">Tags (Comma separated)</label>
+                  <label className="font-semibold block mb-1">Tags / Pills (Comma separated)</label>
                   <input
                     type="text"
                     value={prodTags}
@@ -2855,45 +2898,63 @@ export const AdminPage = () => {
                       <p className="text-sm text-brand-dark/60 font-medium">No FAQs added yet.</p>
                     </div>
                   ) : (
-                    <div className="space-y-4">
+                    <div className="space-y-2.5">
                       {prodFaqs.map((faq, idx) => (
-                        <div key={idx} className="p-4 bg-white border border-brand-card rounded-xl shadow-sm space-y-3 relative group transition-all hover:border-brand-dark/30">
-                          <div className="flex justify-between items-center border-b border-brand-card/30 pb-2">
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-grey flex items-center gap-2">
-                              <span className="w-5 h-5 rounded-full bg-brand-bg flex items-center justify-center text-brand-dark">{idx + 1}</span>
-                              FAQ Entry
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => removeProdFAQ(idx)}
-                              className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1.5 rounded-lg transition opacity-50 group-hover:opacity-100"
-                              title="Remove FAQ"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 gap-3 pt-1">
-                            <div>
-                              <label className="text-[11px] font-bold uppercase text-brand-grey/80 block mb-1.5">Question</label>
-                              <input
-                                type="text"
-                                placeholder="e.g. Is this suitable for all skin types?"
-                                value={faq.question}
-                                onChange={(e) => updateProdFAQ(idx, "question", e.target.value)}
-                                className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-lg text-sm focus:outline-none focus:border-brand-dark focus:bg-white transition"
-                              />
+                        <div key={idx} className="bg-white border border-brand-card/60 rounded-xl overflow-hidden shadow-sm transition">
+                          <div 
+                            onClick={() => setOpenProdFaqIndex(openProdFaqIndex === idx ? null : idx)}
+                            className="flex items-center justify-between p-3 bg-brand-bg/40 hover:bg-brand-bg cursor-pointer select-none transition"
+                          >
+                            <div className="flex items-center gap-2 min-w-0 pr-2">
+                              <span className="w-5 h-5 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                                {idx + 1}
+                              </span>
+                              <span className="text-xs font-semibold text-brand-dark truncate">
+                                {faq.question ? faq.question : `FAQ #${idx + 1}`}
+                              </span>
                             </div>
-                            <div>
-                              <label className="text-[11px] font-bold uppercase text-brand-grey/80 block mb-1.5">Answer</label>
-                              <textarea
-                                placeholder="e.g. Yes, it is dermatologically tested and suitable for sensitive skin."
-                                value={faq.answer}
-                                onChange={(e) => updateProdFAQ(idx, "answer", e.target.value)}
-                                rows={2}
-                                className="w-full p-2.5 bg-brand-bg/50 border border-brand-card rounded-lg text-sm focus:outline-none focus:border-brand-dark focus:bg-white resize-none transition"
-                              />
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeProdFAQ(idx);
+                                }}
+                                className="text-[#c24b4b] hover:bg-red-50 p-1.5 rounded-lg transition"
+                                title="Remove FAQ"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                              <div className="p-1 text-brand-grey">
+                                {openProdFaqIndex === idx ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </div>
                             </div>
                           </div>
+
+                          {openProdFaqIndex === idx && (
+                            <div className="p-3.5 pt-2 border-t border-brand-card/30 space-y-3 bg-white">
+                              <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-brand-grey block mb-1">Question</label>
+                                <input
+                                  type="text"
+                                  placeholder="e.g. Is this suitable for all skin types?"
+                                  value={faq.question}
+                                  onChange={(e) => updateProdFAQ(idx, "question", e.target.value)}
+                                  className="w-full p-2 bg-brand-bg/50 border border-brand-card rounded-lg text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition"
+                                />
+                              </div>
+                              <div>
+                                <label className="text-[10px] font-bold uppercase tracking-wider text-brand-grey block mb-1">Answer</label>
+                                <textarea
+                                  placeholder="e.g. Yes, it is dermatologically tested..."
+                                  value={faq.answer}
+                                  onChange={(e) => updateProdFAQ(idx, "answer", e.target.value)}
+                                  rows={2}
+                                  className="w-full p-2 bg-brand-bg/50 border border-brand-card rounded-lg text-xs focus:outline-none focus:border-brand-dark focus:bg-white resize-none transition"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -3758,25 +3819,53 @@ If you haven’t received your order within 7 days of receiving your shipping co
               <Plus size={12} /> Add Question
             </button>
           </div>
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {localFAQ.map((q, idx) => (
-              <div key={idx} className="p-4 bg-white border border-brand-card/30 rounded-xl space-y-3 relative">
-                <div className="flex justify-between items-center">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-brand-grey">Question {idx + 1}</span>
-                  {localFAQ.length > 1 && (
-                    <button onClick={() => removeFAQQuestion(idx)} className="text-[#c24b4b] hover:bg-[#c24b4b]/10 p-1 rounded transition">
-                      <Trash2 size={12} />
-                    </button>
-                  )}
+              <div key={idx} className="bg-white border border-brand-card/60 rounded-xl overflow-hidden shadow-sm transition">
+                <div 
+                  onClick={() => setOpenCmsFaqIndex(openCmsFaqIndex === idx ? null : idx)}
+                  className="flex items-center justify-between p-3 bg-brand-bg/40 hover:bg-brand-bg cursor-pointer select-none transition"
+                >
+                  <div className="flex items-center gap-2 min-w-0 pr-2">
+                    <span className="w-5 h-5 rounded-full bg-brand-dark text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
+                      {idx + 1}
+                    </span>
+                    <span className="text-xs font-semibold text-brand-dark truncate">
+                      {q.question ? q.question : `Question #${idx + 1}`}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    {localFAQ.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeFAQQuestion(idx);
+                        }}
+                        className="text-[#c24b4b] hover:bg-red-50 p-1.5 rounded-lg transition"
+                        title="Remove Question"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                    <div className="p-1 text-brand-grey">
+                      {openCmsFaqIndex === idx ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <label className={labelClass}>Question</label>
-                  <input type="text" value={q.question || ""} onChange={(e) => updateFAQQuestion(idx, "question", e.target.value)} className={inputClass} />
-                </div>
-                <div>
-                  <label className={labelClass}>Answer</label>
-                  <textarea rows={3} value={q.answer || ""} onChange={(e) => updateFAQQuestion(idx, "answer", e.target.value)} className={inputClass + " resize-none"} />
-                </div>
+
+                {openCmsFaqIndex === idx && (
+                  <div className="p-3.5 pt-2 border-t border-brand-card/30 space-y-3 bg-white">
+                    <div>
+                      <label className={labelClass}>Question</label>
+                      <input type="text" value={q.question || ""} onChange={(e) => updateFAQQuestion(idx, "question", e.target.value)} className={inputClass} />
+                    </div>
+                    <div>
+                      <label className={labelClass}>Answer</label>
+                      <textarea rows={3} value={q.answer || ""} onChange={(e) => updateFAQQuestion(idx, "answer", e.target.value)} className={inputClass + " resize-none"} />
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

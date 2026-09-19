@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, EmailStr
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Union
 from bson import ObjectId
 from datetime import datetime
 
@@ -66,6 +66,7 @@ class ProductBase(BaseModel):
     savings: Optional[float] = None
     netVolume: str
     subtitle: str
+    description: Optional[str] = None
     badge: Optional[str] = None
     themeColor: str
     keyActives: List[str]
@@ -97,6 +98,7 @@ class ProductUpdate(BaseModel):
     savings: Optional[float] = None
     netVolume: Optional[str] = None
     subtitle: Optional[str] = None
+    description: Optional[str] = None
     badge: Optional[str] = None
     themeColor: Optional[str] = None
     keyActives: Optional[List[str]] = None
@@ -171,7 +173,7 @@ class ReviewCreate(BaseModel):
 
 class ReviewResponse(ReviewBase):
     db_id: Optional[PyObjectId] = Field(alias="_id", default=None)
-    created_at: datetime
+    created_at: Union[datetime, str]
     
     class Config:
         populate_by_name = True
@@ -294,6 +296,7 @@ class ReviewCreate(BaseModel):
     title: str
     comment: str
     images: Optional[List[str]] = []
+    created_at: Optional[datetime] = None
 
 class ReviewUpdate(BaseModel):
     product_id: Optional[str] = None
@@ -302,6 +305,7 @@ class ReviewUpdate(BaseModel):
     title: Optional[str] = None
     comment: Optional[str] = None
     images: Optional[List[str]] = None
+    created_at: Optional[datetime] = None
 
 class ReviewResponse(ReviewCreate):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -309,7 +313,7 @@ class ReviewResponse(ReviewCreate):
     order_id: Optional[str] = "direct"
     user_name: Optional[str] = "Customer"
     user_email: Optional[str] = ""
-    created_at: datetime
+    created_at: Union[datetime, str]
 
     class Config:
         populate_by_name = True

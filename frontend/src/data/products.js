@@ -7,6 +7,7 @@ export const products = [
     rating: 4.8,
     netVolume: "50 mL (1.7 fl oz)",
     subtitle: "Powerful Protection — Non-Greasy Formula",
+    description: "Experience weightless daily sun protection with our Ultra Light Sunscreen SPF 50+ PA++++. Formulated with 2% Niacinamide, Zinc Oxide, and Vitamin E to protect skin from harmful UV rays while reducing tanning and dark spots.",
     badge: "SPF 50+ PA++++",
     themeColor: "brand-accent", // burnt-orange
     keyActives: [
@@ -47,6 +48,7 @@ export const products = [
     rating: 4.8,
     netVolume: "100 mL",
     subtitle: "Effective Gentle Care — Deep Cleansing Formula",
+    description: "Bright Skin Face Wash gently cleanses dirt, oil, and impurities without stripping your skin's natural moisture barrier. Enriched with Salicylic Acid, Niacinamide, and Alpha Arbutin for a refreshed, even-toned complexion.",
     badge: "For All Skin Types",
     themeColor: "brand-secondary", // navy blue
     keyActives: [
@@ -67,12 +69,6 @@ export const products = [
       "Rinse Well"
     ],
     ingredients: "Water, Glycerin, Sodium Laureth Sulfate, Cocamidopropyl Betaine, Coco Diethanolamine, Coco Glucoside, Niacinamide, Alpha Arbutin, Glycyrrhiza Glabra (Licorice Extract), Carica Papaya (Papaya Extract), Salicylic Acid, Glycolic Acid, Aloe Barbadensis Extract, D-Panthenol, Allantoin, Disodium EDTA, PEG-150 Distearate, DMDM Hydantoin, Fragrance, Citric Acid",
-    caution: [
-      "For external use only",
-      "Avoid contact with eyes",
-      "Discontinue use if irritation occurs",
-      "Keep out of reach of children"
-    ],
     tags: ["For All Skin Types", "Fragrance Free", "Daily Use"],
     images: [
       "/images/facewash.png",
@@ -91,6 +87,7 @@ export const products = [
     savings: 86,
     netVolume: "50 mL + 100 mL",
     subtitle: "Complete Daily Ritual — Powerful Protection & Effective Gentle Care",
+    description: "The Glow Duo combines our Bright Skin Face Wash and Ultra Light Sunscreen for complete daily care. Cleanse deeply and protect effortlessly against UV rays while saving on your daily skincare essentials.",
     badge: "Best Value",
     themeColor: "brand-dark", // charcoal
     keyActives: [

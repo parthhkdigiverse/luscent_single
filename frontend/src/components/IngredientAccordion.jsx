@@ -1,55 +1,48 @@
-import React, { useState } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
+import React from "react";
+import { Sparkles } from "lucide-react";
 
-export const IngredientAccordion = ({ actives, fullList }) => {
-  const [openSection, setOpenSection] = useState(null);
+export const IngredientAccordion = ({ ingredients, fullList, actives }) => {
+  const content = ingredients || fullList || (Array.isArray(actives) ? actives.join(", ") : actives) || "";
+  let items = [];
 
-  const toggleSection = (section) => {
-    setOpenSection(openSection === section ? null : section);
-  };
+  if (Array.isArray(content)) {
+    content.forEach((c) => {
+      if (typeof c === "string") {
+        c.split(/[\n,]+/).forEach((item) => {
+          if (item.trim()) items.push(item.trim());
+        });
+      } else if (c) {
+        items.push(String(c).trim());
+      }
+    });
+  } else if (typeof content === "string" && content.trim()) {
+    content.split(/[\n,]+/).forEach((item) => {
+      if (item.trim()) items.push(item.trim());
+    });
+  }
+
+  if (items.length === 0) {
+    return (
+      <div className="text-xs text-brand-grey py-4">
+        No ingredients added yet.
+      </div>
+    );
+  }
 
   return (
-    <div className="border border-brand-card/60 rounded-2xl overflow-hidden divide-y divide-brand-card/60 bg-white">
-      {/* Key Actives Section */}
-      <div>
-        <button
-          onClick={() => toggleSection("actives")}
-          className="w-full flex items-center justify-between px-5 py-4 text-left font-serif text-sm font-medium text-brand-dark hover:bg-brand-bg transition-colors duration-200"
-        >
-          <span>Key Active Ingredients</span>
-          {openSection === "actives" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-        {openSection === "actives" && (
-          <div className="px-5 pb-5 pt-1">
-            <div className="grid grid-cols-2 gap-3">
-              {actives.map((act, idx) => (
-                <div key={idx} className="bg-brand-bg px-3.5 py-2.5 rounded-xl border border-brand-card/30">
-                  <span className="text-xs font-semibold text-brand-dark block mb-0.5">{act.split(" ")[0]}</span>
-                  <span className="text-xs text-brand-grey">{act}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Full Ingredient List */}
-      <div>
-        <button
-          onClick={() => toggleSection("full")}
-          className="w-full flex items-center justify-between px-5 py-4 text-left font-serif text-sm font-medium text-brand-dark hover:bg-brand-bg transition-colors duration-200"
-        >
-          <span>Full Ingredient List</span>
-          {openSection === "full" ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-        {openSection === "full" && (
-          <div className="px-5 pb-5 pt-1">
-            <p className="text-xs text-brand-grey leading-relaxed font-sans bg-brand-bg p-4 rounded-xl border border-brand-card/30">
-              {fullList}
-            </p>
-          </div>
-        )}
-      </div>
+    <div className="bg-white border border-brand-card/60 rounded-2xl p-5 shadow-sm space-y-3 max-w-2xl">
+      <h4 className="font-serif text-sm font-semibold text-brand-dark flex items-center gap-2 border-b border-brand-card/40 pb-2">
+        <Sparkles size={16} className="text-brand-accent" />
+        Ingredients
+      </h4>
+      <ul className="space-y-2 pt-1">
+        {items.map((item, idx) => (
+          <li key={idx} className="flex items-center gap-2.5 text-xs md:text-sm text-brand-dark font-medium py-1 border-b border-brand-card/20 last:border-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-accent shrink-0" />
+            <span>{item}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 };

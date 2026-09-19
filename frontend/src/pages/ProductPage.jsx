@@ -281,8 +281,7 @@ export const ProductPage = () => {
       {/* Accordion / Tabs Details */}
       <section className="border-t border-brand-card/40 pt-12 text-left">
         <div className="flex border-b border-brand-card/40 mb-6 gap-6 overflow-x-auto pb-1">
-          {["description", "benefits", "how-to-use", "ingredients", "faq", "caution"].map((tab) => {
-            if (tab === "caution" && !product.caution) return null;
+          {["description", "benefits", "how-to-use", "ingredients", "faq"].map((tab) => {
             return (
               <button
                 key={tab}
@@ -302,23 +301,29 @@ export const ProductPage = () => {
           {activeTab === "description" && (
             <div className="space-y-4 max-w-3xl">
               <p className="text-xs md:text-sm text-brand-grey leading-relaxed">
-                Experience clinical care combined with luxury application. Our {product.name} is engineered using premium standard, non-comedogenic ingredients to ensure total skin protection and a nourishing, silky experience.
+                {product.description || "No product description added yet."}
               </p>
-              <div className="flex flex-wrap gap-2 pt-2">
-                {product.tags.map((tag, idx) => (
-                  <span key={idx} className="bg-brand-card text-brand-dark px-3 py-1 rounded-full text-[10px] font-semibold">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              {product.tags && product.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {product.tags.map((tag, idx) => (
+                    <span key={idx} className="bg-brand-card text-brand-dark px-3 py-1 rounded-full text-[10px] font-semibold">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           {activeTab === "benefits" && (
             <div className="flex flex-wrap gap-3 max-w-2xl py-2">
-              {product.benefits.map((benefit, idx) => (
-                <BenefitBadge key={idx} text={benefit} />
-              ))}
+              {product.benefits && product.benefits.length > 0 ? (
+                product.benefits.map((benefit, idx) => (
+                  <BenefitBadge key={idx} text={benefit} />
+                ))
+              ) : (
+                <div className="text-xs text-brand-grey py-4">No benefits added yet.</div>
+              )}
             </div>
           )}
 
@@ -345,24 +350,11 @@ export const ProductPage = () => {
               )}
             </div>
           )}
-
-          {activeTab === "caution" && product.caution && (
-            <div className="bg-red-50/50 border border-red-100 rounded-2xl p-5 max-w-2xl space-y-2">
-              <span className="flex items-center gap-1.5 text-red-800 text-xs font-semibold uppercase tracking-wider">
-                <AlertCircle size={14} /> Usage Cautions
-              </span>
-              <ul className="list-disc list-inside text-xs text-red-700/80 space-y-1 pl-1">
-                {product.caution.map((c, idx) => (
-                  <li key={idx}>{c}</li>
-                ))}
-              </ul>
-            </div>
-          )}
         </div>
       </section>
 
-      {/* Customer Reviews Section (Compact Space-Saving Layout) */}
-      <section id="reviews-section" className="border-t border-brand-card/30 pt-8 text-left max-w-4xl scroll-mt-24">
+      {/* Customer Reviews Section (3-Column Grid Layout) */}
+      <section id="reviews-section" className="border-t border-brand-card/30 pt-8 text-left max-w-7xl w-full scroll-mt-24">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="flex items-center gap-3">
             <h2 className="font-serif text-lg font-semibold text-brand-dark">
@@ -379,34 +371,43 @@ export const ProductPage = () => {
             No reviews yet for this product.
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {reviews.map((rev, idx) => (
               <div 
                 key={rev._id || rev.id || idx} 
-                className="bg-white border border-brand-card/40 rounded-xl p-3 shadow-sm hover:border-brand-dark/30 transition-all text-xs flex flex-col justify-between gap-1"
+                className="bg-white border border-brand-card/40 rounded-2xl p-4 shadow-sm hover:border-brand-dark/30 transition-all text-xs flex flex-col justify-between gap-2"
               >
-                <div className="flex items-center justify-between gap-2 border-b border-brand-card/20 pb-1.5">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <span className="w-5 h-5 rounded-full bg-brand-dark text-white font-bold text-[9px] flex items-center justify-center flex-shrink-0 uppercase">
-                      {(rev.name || "C")[0]}
+                <div className="flex items-center justify-between gap-2 border-b border-brand-card/20 pb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-6 h-6 rounded-full bg-brand-dark text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 uppercase">
+                      {(rev.name || rev.user_name || "C")[0]}
                     </span>
-                    <span className="font-semibold text-xs text-brand-dark truncate">{rev.name || "Verified Customer"}</span>
+                    <span className="font-semibold text-xs text-brand-dark truncate">{rev.name || rev.user_name || "Verified Customer"}</span>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <span className="text-amber-500 font-bold text-xs">★ {rev.rating}</span>
-                    <span className="text-[9px] text-brand-grey">
-                      • {rev.created_at ? new Date(rev.created_at).toLocaleDateString("en-IN", { month: "short", day: "numeric" }) : ""}
+                    <span className="text-[10px] text-brand-grey">
+                      • {(() => {
+                          if (!rev.created_at) return "";
+                          try {
+                            const s = String(rev.created_at);
+                            const d = new Date(s.includes("T") ? (s.endsWith("Z") ? s : s + "Z") : s + "T12:00:00Z");
+                            return isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-IN", { month: "short", day: "numeric", year: "numeric" });
+                          } catch (e) {
+                            return "";
+                          }
+                        })()}
                     </span>
                   </div>
                 </div>
 
-                <div className="pt-0.5">
+                <div className="pt-1">
                   {rev.title && (
-                    <strong className="text-brand-dark text-xs block truncate">{rev.title}</strong>
+                    <strong className="text-brand-dark text-xs block mb-1 font-semibold">{rev.title}</strong>
                   )}
-                  <p className="text-brand-grey text-[11px] leading-tight mt-0.5">{rev.comment}</p>
+                  <p className="text-brand-grey text-[11px] leading-relaxed">{rev.comment}</p>
                   {rev.images && rev.images.length > 0 && (
-                    <div className="flex gap-2 mt-2 overflow-x-auto no-scrollbar pb-1">
+                    <div className="flex gap-2 mt-3 overflow-x-auto no-scrollbar pb-1">
                       {rev.images.map((img, i) => (
                         <div 
                           key={i} 
