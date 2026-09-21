@@ -1512,13 +1512,12 @@ export const AdminPage = () => {
                             <th className="py-4 px-4">AMOUNT</th>
                             <th className="py-4 px-6">DATE</th>
                             <th className="py-4 px-4">FULFILLMENT</th>
-                            <th className="py-4 px-4 text-center">ACTIONS</th>
                           </tr>
                         </thead>
                         <tbody className="text-xs sm:text-sm">
                           {filteredOrders.length === 0 ? (
                             <tr>
-                              <td colSpan="11" className="py-12 text-center text-brand-grey">No orders found.</td>
+                              <td colSpan="10" className="py-12 text-center text-brand-grey">No orders found.</td>
                             </tr>
                           ) : (
                             filteredOrders.map((o, idx) => {
@@ -1595,6 +1594,7 @@ export const AdminPage = () => {
                                     {o.created_at ? new Date(o.created_at).toLocaleDateString("en-GB", { day: 'numeric', month: 'short' }) : "Today"}
                                   </td>
                                   <td className="py-4 px-4">
+                                    <div className="flex items-center gap-3">
                                     {o.tracking_number ? (
                                       <div className="flex flex-col gap-2 relative">
                                         <div className="flex items-center gap-3">
@@ -1643,8 +1643,6 @@ export const AdminPage = () => {
                                         <Truck size={12} /> SHIP ORDER
                                       </button>
                                     )}
-                                  </td>
-                                  <td className="py-4 px-4 text-center">
                                     <button 
                                       onClick={async () => {
                                         if(window.confirm(`Are you sure you want to delete order ${o.order_number}?`)) {
@@ -1665,6 +1663,7 @@ export const AdminPage = () => {
                                     >
                                       <Trash2 size={16} />
                                     </button>
+                                    </div>
                                   </td>
                                 </tr>
                               );
