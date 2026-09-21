@@ -12,7 +12,7 @@ export const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [announcementText, setAnnouncementText] = useState("GOLD JEWELLERY 💰 • VISIT SHOWROOM TODAY • LIMITED TIME OFFER! GET 2% MAKING CHARGES ON GOLD JEWELLERY - SHOP NOW • TRUSTED JEWELLERY IN NADIAD ✨ •");
+  const [announcementText, setAnnouncementText] = useState("");
   const location = useLocation();
 
   useEffect(() => {

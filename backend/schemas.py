@@ -363,4 +363,28 @@ class BroadcastRequest(BaseModel):
     subject: str
     message: str
 
+# Testimonial Schemas
+class TestimonialBase(BaseModel):
+    video_url: str
+    title: Optional[str] = None
+    product_ids: List[str] = []
+    is_active: bool = True
+    display_order: int = 0
 
+class TestimonialCreate(TestimonialBase):
+    pass
+
+class TestimonialUpdate(BaseModel):
+    video_url: Optional[str] = None
+    title: Optional[str] = None
+    product_ids: Optional[List[str]] = None
+    is_active: Optional[bool] = None
+    display_order: Optional[int] = None
+
+class TestimonialResponse(TestimonialBase):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True

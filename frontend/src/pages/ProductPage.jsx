@@ -8,6 +8,7 @@ import { BenefitBadge } from "../components/BenefitBadge";
 import { HowToUseSteps } from "../components/HowToUseSteps";
 import { IngredientAccordion } from "../components/IngredientAccordion";
 import { FAQAccordion } from "../components/FAQAccordion";
+import TestimonialsSection from "../components/TestimonialsSection";
 import { useCart } from "../context/CartContext";
 import { API_URL } from "../config";
 
@@ -352,6 +353,9 @@ export const ProductPage = () => {
           )}
         </div>
       </section>
+
+      {/* Testimonials Section */}
+      <TestimonialsSection productId={product.id} />
 
       {/* Customer Reviews Section (3-Column Grid Layout) */}
       <section id="reviews-section" className="border-t border-brand-card/30 pt-8 text-left max-w-7xl w-full scroll-mt-24">

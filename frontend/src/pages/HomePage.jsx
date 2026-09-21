@@ -2,8 +2,6 @@ import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, Sparkles, CheckCircle2, ShieldCheck, ChevronLeft, ChevronRight, ShoppingBag, Star, Droplets, Leaf } from "lucide-react";
 import { Loader } from "../components/Loader";
-import { testimonials as staticTestimonials } from "../data/testimonials";
-import { faqs as staticFaqs } from "../data/faqs";
 import { Button } from "../components/Button";
 import { ProductCard } from "../components/ProductCard";
 import { TrustBadgeStrip } from "../components/TrustBadgeStrip";
@@ -14,47 +12,16 @@ import { BeforeAfterComparison } from "../components/BeforeAfterComparison";
 import { OfferCard } from "../components/OfferCard";
 import { API_URL } from "../config";
 
-const defaultHeroSlides = [
-  {
-    id: "sunscreen",
-    tag: "SPF 50+ PA++++ DEFENSE",
-    title: "Powerful Protection. Effortless Glow.",
-    desc: "Weightless, non-greasy sunscreen that blocks UV rays while treating dark spots. Powered by 2% Niacinamide & Zinc Oxide.",
-    image: "/images/sunscreen_banner.png",
-    link: "/product/sunscreen",
-    ctaText: "Shop Now"
-  },
-  {
-    id: "face-wash",
-    tag: "DEEP CLEANSING & BRIGHTENING",
-    title: "Gentle Cleanse. Radiant Skin.",
-    desc: "Exfoliates pores, controls breakouts, and fades dark spots with Salicylic Acid & Niacinamide.",
-    image: "/images/sunscreen_beach_banner.jpg",
-    link: "/product/face-wash",
-    ctaText: "Shop Now"
-  },
-  {
-    id: "combo",
-    tag: "THE COMPLETE GLOW ROUTINE",
-    title: "Ultimate Skin Defense Duo.",
-    desc: "Maximum sun protection combined with a deep brightening cleanse. Get our bestselling duo and save ₹86.",
-    image: "/images/hero_banner.png",
-    link: "/product/combo",
-    ctaText: "Shop Now"
-  }
-];
+
 
 export const HomePage = () => {
   const [productList, setProductList] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingContent, setLoadingContent] = useState(true);
-  const [heroSlides, setHeroSlides] = useState(defaultHeroSlides);
-  const [bannerText, setBannerText] = useState({ 
-    title: "Healthy Skin Starts with the Right Essentials.", 
-    subtitle: "Discover thoughtfully formulated skincare powered by effective ingredients to cleanse, protect, and nourish your skin. From deep cleansing to daily SPF protection, Luscent Glow helps you achieve healthy-looking, radiant skin—every day." 
-  });
-  const [testimonialsList, setTestimonialsList] = useState(staticTestimonials);
-  const [faqList, setFaqList] = useState(staticFaqs);
+  const [heroSlides, setHeroSlides] = useState([]);
+  const [bannerText, setBannerText] = useState(null);
+  const [testimonialsList, setTestimonialsList] = useState([]);
+  const [faqList, setFaqList] = useState([]);
   const [beforeImage, setBeforeImage] = useState("/before-skin.png");
   const [afterImage, setAfterImage] = useState("/after-skin.png");
   const [offerCardData, setOfferCardData] = useState(null);
@@ -154,6 +121,10 @@ export const HomePage = () => {
 
   if (loadingProducts || loadingContent) {
     return <Loader />;
+  }
+
+  if (!heroSlides || heroSlides.length === 0) {
+    return null; // Avoid crash if no slides
   }
 
   const activeRatio = slideRatios[activeSlide] || (activeSlide === 0 ? 2.4 : 1.79);

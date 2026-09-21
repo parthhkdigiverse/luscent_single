@@ -1097,6 +1097,7 @@ export const AdminPage = () => {
             <NavItem id="subscribers" label="Subscribers" icon={Mail} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
             <NavItem id="content" label="Content" icon={FileText} />
+            <NavItem id="testimonials" label="Testimonials" icon={Sparkles} />
           </div>
         </div>
 
@@ -1511,12 +1512,13 @@ export const AdminPage = () => {
                             <th className="py-4 px-4">AMOUNT</th>
                             <th className="py-4 px-6">DATE</th>
                             <th className="py-4 px-4">FULFILLMENT</th>
+                            <th className="py-4 px-4 text-center">ACTIONS</th>
                           </tr>
                         </thead>
                         <tbody className="text-xs sm:text-sm">
                           {filteredOrders.length === 0 ? (
                             <tr>
-                              <td colSpan="9" className="py-12 text-center text-brand-grey">No orders found.</td>
+                              <td colSpan="11" className="py-12 text-center text-brand-grey">No orders found.</td>
                             </tr>
                           ) : (
                             filteredOrders.map((o, idx) => {
@@ -1632,18 +1634,6 @@ export const AdminPage = () => {
                                             CANCEL
                                           </button>
                                         </div>
-                                        <button 
-                                          onClick={async () => {
-                                            if(window.confirm('Move this order to trash?')) {
-                                              await fetchAuth(`${API_URL}/api/admin/orders/${o.id || o._id}/soft-delete`, { method: 'PUT' });
-                                              fetchDashboardData();
-                                            }
-                                          }}
-                                          className="absolute right-0 -bottom-4 p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-full transition-colors"
-                                          title="Delete Order"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
                                       </div>
                                     ) : (
                                       <button 
@@ -1653,6 +1643,28 @@ export const AdminPage = () => {
                                         <Truck size={12} /> SHIP ORDER
                                       </button>
                                     )}
+                                  </td>
+                                  <td className="py-4 px-4 text-center">
+                                    <button 
+                                      onClick={async () => {
+                                        if(window.confirm(`Are you sure you want to delete order ${o.order_number}?`)) {
+                                          try {
+                                            const res = await fetchAuth(`${API_URL}/api/admin/orders/${o.id || o._id}/soft-delete`, { method: 'PUT' });
+                                            if (res.ok) {
+                                              fetchDashboardData();
+                                            } else {
+                                              alert('Failed to delete order');
+                                            }
+                                          } catch(err) {
+                                            alert('Error deleting order');
+                                          }
+                                        }
+                                      }}
+                                      className="p-2 text-brand-grey hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center"
+                                      title="Delete Order"
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
                                   </td>
                                 </tr>
                               );
@@ -2313,6 +2325,14 @@ export const AdminPage = () => {
                 setContentMessage={setContentMessage}
                 API_URL={API_URL}
                 fetchAuth={fetchAuth}
+              />
+            )}
+
+            {activeTab === "testimonials" && (
+              <TestimonialsManagerTab 
+                API_URL={API_URL} 
+                fetchAuth={fetchAuth} 
+                productsList={productsList} 
               />
             )}
 
@@ -5274,6 +5294,328 @@ const ReturnsTab = ({ returnsList, fetchDashboardData, API_URL, fetchAuth }) => 
           </table>
         </div>
       </div>
+    </div>
+  );
+};
+
+const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
+  const [testimonials, setTestimonials] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [headerTitle, setHeaderTitle] = useState("REAL RESULTS, REAL PEOPLE");
+  const [headerSubtitle, setHeaderSubtitle] = useState("Hear directly from our community about their skincare journey with Luscent Glow.");
+  const [headerSaving, setHeaderSaving] = useState(false);
+  
+  // Form fields
+  const [videoUrl, setVideoUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  const [isActive, setIsActive] = useState(true);
+  const [displayOrder, setDisplayOrder] = useState(0);
+
+  useEffect(() => {
+    fetchTestimonials();
+    fetchContent();
+  }, []);
+
+  const fetchContent = async () => {
+    try {
+      const res = await fetchAuth(`${API_URL}/api/content`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.video_testimonials_header) {
+          setHeaderTitle(data.video_testimonials_header.title || "REAL RESULTS, REAL PEOPLE");
+          setHeaderSubtitle(data.video_testimonials_header.subtitle || "Hear directly from our community about their skincare journey with Luscent Glow.");
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch content", err);
+    }
+  };
+
+  const saveHeader = async () => {
+    setHeaderSaving(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/content/video_testimonials_header`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: { title: headerTitle, subtitle: headerSubtitle } })
+      });
+      if (res.ok) alert("Header updated successfully!");
+      else alert("Failed to update header");
+    } catch (err) {
+      alert("Error saving header");
+    } finally {
+      setHeaderSaving(false);
+    }
+  };
+
+  const fetchTestimonials = async () => {
+    try {
+      setLoading(true);
+      const res = await fetchAuth(`${API_URL}/api/admin/testimonials`);
+      if (res.ok) {
+        setTestimonials(await res.json());
+      }
+    } catch (err) {
+      console.error("Failed to fetch testimonials", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOpenModal = (testimonial = null) => {
+    if (testimonial) {
+      setEditingId(testimonial.id || testimonial._id);
+      setVideoUrl(testimonial.video_url || "");
+      setTitle(testimonial.title || "");
+      setSelectedProducts(testimonial.product_ids || []);
+      setIsActive(testimonial.is_active !== false);
+      setDisplayOrder(testimonial.display_order || 0);
+    } else {
+      setEditingId(null);
+      setVideoUrl("");
+      setTitle("");
+      setSelectedProducts([]);
+      setIsActive(true);
+      setDisplayOrder(0);
+    }
+    setShowModal(true);
+  };
+
+  const handleToggleActive = async (testimonial) => {
+    const targetId = testimonial.id || testimonial._id;
+    const newStatus = !testimonial.is_active;
+
+    setTestimonials(prev => prev.map(t => 
+      (t.id || t._id) === targetId ? { ...t, is_active: newStatus } : t
+    ));
+
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/testimonials/${targetId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: newStatus })
+      });
+      if (res.ok) {
+        fetchTestimonials();
+      } else {
+        alert("Failed to update status");
+        fetchTestimonials();
+      }
+    } catch (err) {
+      alert("Error updating status");
+      fetchTestimonials();
+    }
+  };
+
+  const handleProductToggle = (productId) => {
+    setSelectedProducts(prev => 
+      prev.includes(productId) 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    const payload = {
+      video_url: videoUrl,
+      title,
+      product_ids: selectedProducts,
+      is_active: isActive,
+      display_order: Number(displayOrder)
+    };
+
+    try {
+      let res;
+      if (editingId) {
+        res = await fetchAuth(`${API_URL}/api/admin/testimonials/${editingId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } else {
+        res = await fetchAuth(`${API_URL}/api/admin/testimonials`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (res.ok) {
+        setShowModal(false);
+        fetchTestimonials();
+      } else {
+        alert("Failed to save testimonial");
+      }
+    } catch (err) {
+      alert("Error saving testimonial");
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!id) return;
+    if (!window.confirm("Are you sure you want to delete this testimonial?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/testimonials/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setTestimonials((prev) => prev.filter((t) => (t.id || t._id) !== id));
+        fetchTestimonials();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.detail || "Failed to delete testimonial");
+      }
+    } catch (err) {
+      alert("Error deleting testimonial");
+    }
+  };
+
+  if (loading) return <div className="py-20 text-center text-sm text-brand-grey">Loading testimonials...</div>;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center mb-2">
+        <h3 className="font-serif text-xl font-bold text-brand-dark">Testimonials Settings</h3>
+      </div>
+      
+      <div className="bg-white rounded-3xl border border-brand-card/40 p-6 space-y-4">
+        <h4 className="text-sm font-semibold text-brand-dark mb-4 uppercase tracking-wider">Section Header Text</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Title</label>
+            <input type="text" value={headerTitle} onChange={e => setHeaderTitle(e.target.value)} className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Subtitle</label>
+            <input type="text" value={headerSubtitle} onChange={e => setHeaderSubtitle(e.target.value)} className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark" />
+          </div>
+        </div>
+        <div className="flex justify-end pt-2">
+          <Button onClick={saveHeader} disabled={headerSaving}>{headerSaving ? "Saving..." : "Save Header"}</Button>
+        </div>
+      </div>
+
+      <div className="flex justify-between items-center mt-8">
+        <h3 className="font-serif text-xl font-bold text-brand-dark">Testimonials List</h3>
+        <Button onClick={() => handleOpenModal()} className="flex items-center gap-2 text-sm px-4 py-2">
+          <Plus size={16} /> Add Testimonial
+        </Button>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-brand-card/40 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs text-left">
+            <thead className="bg-brand-bg text-brand-grey border-b border-brand-card/40">
+              <tr>
+                <th className="py-4 px-6 font-semibold uppercase tracking-wider">Title / Video</th>
+                <th className="py-4 px-6 font-semibold uppercase tracking-wider">Products Linked</th>
+                <th className="py-4 px-6 font-semibold uppercase tracking-wider">Status</th>
+                <th className="py-4 px-6 font-semibold uppercase tracking-wider text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-brand-card/20">
+              {testimonials.length === 0 ? (
+                <tr>
+                  <td colSpan="4" className="py-12 text-center text-brand-grey">No testimonials found. Add one to get started.</td>
+                </tr>
+              ) : (
+                testimonials.map((item) => (
+                  <tr key={item.id || item._id} className="hover:bg-brand-bg/30 transition-colors">
+                    <td className="py-4 px-6">
+                      <div className="font-semibold text-brand-dark">{item.title || "Untitled"}</div>
+                      <div className="text-[10px] text-brand-grey truncate max-w-[200px] mt-1">{item.video_url}</div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <div className="flex flex-wrap gap-1">
+                        {item.product_ids?.length > 0 ? item.product_ids.map(pid => (
+                          <span key={pid} className="px-2 py-0.5 bg-brand-card rounded-full text-[10px] font-medium text-brand-dark">
+                            {productsList.find(p => p.id === pid)?.name || pid}
+                          </span>
+                        )) : (
+                          <span className="text-brand-grey italic">Global (Not strictly linked)</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="py-4 px-6">
+                      <button 
+                        onClick={() => handleToggleActive(item)}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase transition-all cursor-pointer ${item.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                        title="Click to toggle Active / Inactive status"
+                      >
+                        {item.is_active ? 'Active' : 'Inactive'}
+                      </button>
+                    </td>
+                    <td className="py-4 px-6 text-right space-x-2">
+                      <button onClick={() => handleOpenModal(item)} className="p-1.5 text-brand-grey hover:bg-brand-card hover:text-brand-dark rounded transition-colors"><Edit2 size={14}/></button>
+                      <button onClick={() => handleDelete(item.id || item._id)} className="p-1.5 text-brand-grey hover:bg-red-50 hover:text-red-500 rounded transition-colors"><Trash2 size={14}/></button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] p-4 backdrop-blur-sm">
+          <div className="bg-white w-full max-w-2xl rounded-3xl p-6 md:p-8 max-h-[90vh] overflow-y-auto relative shadow-2xl">
+            <button onClick={() => setShowModal(false)} className="absolute top-6 right-6 p-2 bg-brand-bg rounded-full hover:bg-brand-card transition-colors text-brand-dark"><X size={18}/></button>
+            <h2 className="text-2xl font-serif font-bold text-brand-dark mb-6">{editingId ? 'Edit Testimonial' : 'Add New Testimonial'}</h2>
+            
+            <form onSubmit={handleSave} className="space-y-5">
+              <div>
+                <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Video URL / Link *</label>
+                <input type="url" required value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="e.g. YouTube shorts link, mp4 URL" className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark" />
+                <p className="text-[10px] text-brand-grey mt-1">Accepts direct video URLs or YouTube links.</p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Title (Optional)</label>
+                <input type="text" value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Amazing Results!" className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-brand-dark mb-2 uppercase tracking-wider">Link to Products *</label>
+                <div className="bg-brand-bg rounded-xl border border-brand-card/50 p-4 max-h-48 overflow-y-auto space-y-2">
+                  {productsList.map(product => (
+                    <label key={product.id} className="flex items-center gap-3 cursor-pointer p-2 hover:bg-brand-card rounded-lg transition-colors">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedProducts.includes(product.id)}
+                        onChange={() => handleProductToggle(product.id)}
+                        className="w-4 h-4 text-brand-dark rounded border-gray-300 focus:ring-brand-dark"
+                      />
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        {product.images && product.images[0] && (
+                          <img src={product.images[0]} alt="" className="w-8 h-8 object-cover rounded bg-white" />
+                        )}
+                        <span className="text-sm font-medium text-brand-dark truncate">{product.name}</span>
+                      </div>
+                    </label>
+                  ))}
+                  {productsList.length === 0 && <div className="text-xs text-brand-grey italic">No products available.</div>}
+                </div>
+                <p className="text-[10px] text-brand-grey mt-1">Select the products on whose pages this testimonial should appear.</p>
+              </div>
+
+              <div className="flex items-center pt-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-5 h-5 text-brand-dark rounded border-gray-300 focus:ring-brand-dark" />
+                  <span className="text-sm font-bold text-brand-dark">Active</span>
+                </label>
+              </div>
+
+              <div className="pt-6 border-t border-brand-card/40 flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setShowModal(false)} className="px-6">Cancel</Button>
+                <Button type="submit" className="px-8">Save Testimonial</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

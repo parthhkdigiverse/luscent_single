@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection, testimonials_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
@@ -747,7 +747,15 @@ async def cancel_order_in_db(order: dict):
 @app.put("/api/admin/orders/{order_id}/soft-delete")
 async def soft_delete_admin_order(order_id: str, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
-    order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    order = None
+    try:
+        order = await orders_collection.find_one({"_id": ObjectId(order_id)})
+    except Exception:
+        pass
+    if not order:
+        order = await orders_collection.find_one({"_id": order_id})
+    if not order:
+        order = await orders_collection.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
         
@@ -2009,6 +2017,89 @@ async def update_return_status(return_id: str, return_update: schemas.ReturnUpda
         raise HTTPException(status_code=404, detail="Return record not found")
         
     return {"message": "Return record updated successfully"}
+
+# --- Testimonials ---
+@app.get("/api/testimonials", response_model=List[schemas.TestimonialResponse])
+async def get_testimonials(product_id: Optional[str] = None):
+    query = {"is_active": {"$ne": False}}
+    if product_id:
+        query["product_ids"] = product_id
+    
+    cursor = testimonials_collection.find(query).sort("display_order", 1)
+    testimonials = []
+    async for doc in cursor:
+        doc["id"] = str(doc["_id"])
+        testimonials.append(doc)
+    return testimonials
+
+@app.get("/api/admin/testimonials", response_model=List[schemas.TestimonialResponse])
+async def get_admin_testimonials(current_user: dict = Depends(get_admin_user)):
+    cursor = testimonials_collection.find({}).sort("display_order", 1)
+    testimonials = []
+    async for doc in cursor:
+        doc["id"] = str(doc["_id"])
+        testimonials.append(doc)
+    return testimonials
+
+@app.post("/api/admin/testimonials", response_model=schemas.TestimonialResponse)
+async def create_testimonial(testimonial_data: schemas.TestimonialCreate, current_user: dict = Depends(get_admin_user)):
+    test_dict = testimonial_data.dict()
+    test_dict["created_at"] = datetime.utcnow()
+    
+    result = await testimonials_collection.insert_one(test_dict)
+    test_dict["id"] = str(result.inserted_id)
+    return test_dict
+
+@app.put("/api/admin/testimonials/{testimonial_id}")
+async def update_testimonial(testimonial_id: str, testimonial_update: schemas.TestimonialUpdate, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    query_conditions = []
+    try:
+        query_conditions.append({"_id": ObjectId(testimonial_id)})
+    except Exception:
+        pass
+    query_conditions.append({"_id": testimonial_id})
+    query_conditions.append({"id": testimonial_id})
+
+    update_data = {k: v for k, v in testimonial_update.dict(exclude_unset=True).items() if v is not None}
+    
+    if not update_data:
+        return {"message": "No fields to update"}
+        
+    updated = False
+    for cond in query_conditions:
+        result = await testimonials_collection.update_one(cond, {"$set": update_data})
+        if result.matched_count > 0:
+            updated = True
+            break
+            
+    if not updated:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+        
+    return {"message": "Testimonial updated successfully"}
+
+@app.delete("/api/admin/testimonials/{testimonial_id}")
+async def delete_testimonial(testimonial_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    query_conditions = []
+    try:
+        query_conditions.append({"_id": ObjectId(testimonial_id)})
+    except Exception:
+        pass
+    query_conditions.append({"_id": testimonial_id})
+    query_conditions.append({"id": testimonial_id})
+
+    deleted = False
+    for cond in query_conditions:
+        res = await testimonials_collection.delete_one(cond)
+        if res.deleted_count > 0:
+            deleted = True
+            break
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    
+    return {"message": "Testimonial deleted successfully"}
 
 # --- Serve Frontend ---
 dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")
