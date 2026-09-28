@@ -1254,7 +1254,8 @@ export const AdminPage = () => {
 
               const getPaymentColor = (status) => {
                 switch(status?.toLowerCase()) {
-                  case 'pending': return "bg-[#fdf4e7] text-[#a5702b] border-[#f5debe]";
+                  case 'pending':
+                  case 'unpaid': return "bg-[#fdf4e7] text-[#a5702b] border-[#f5debe]";
                   case 'paid': return "bg-[#e8f6ed] text-[#349e7b] border-[#c8e7d5]";
                   case 'failed': return "bg-[#fbeaea] text-[#d15858] border-[#f5cdcd]";
                   default: return "bg-brand-card text-brand-dark border-brand-card/60";
@@ -1536,7 +1537,7 @@ export const AdminPage = () => {
 
                               let paymentStatusDisplay = o.paymentStatus;
                               if (!paymentStatusDisplay) {
-                                paymentStatusDisplay = (o.paymentMethod === 'cod') ? 'Pending' : 'Paid';
+                                paymentStatusDisplay = (o.paymentMethod === 'cod') ? 'Unpaid' : 'Paid';
                               } else {
                                 paymentStatusDisplay = paymentStatusDisplay.charAt(0).toUpperCase() + paymentStatusDisplay.slice(1);
                               }

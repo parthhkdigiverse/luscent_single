@@ -411,13 +411,30 @@ async def get_product(slug_or_id: str):
 # --- Orders Routes ---
 @app.post("/api/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Depends(get_current_user_optional)):
-    # Calculate order number
-    order_number = f"LG-{random.randint(100000, 999999)}"
+    # Duplicate prevention (check if identical order was created within the last 5 seconds)
+    from datetime import timedelta
+    recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=5)
+    dup_query = {
+        "phone": order_in.phone,
+        "totalPrice": order_in.totalPrice,
+        "created_at": {"$gte": recent_cutoff}
+    }
+    if current_user:
+        dup_query["user_id"] = current_user["email"]
+        
+    recent_duplicate = await orders_collection.find_one(dup_query)
+    if recent_duplicate:
+        return recent_duplicate
+
+    # Calculate order number (or use provided order_number)
+    order_number = order_in.order_number or f"LG-{random.randint(100000, 999999)}"
     
     order_dict = order_in.dict()
     order_dict["order_number"] = order_number
     order_dict["user_id"] = current_user["email"] if current_user else None
     order_dict["status"] = "pending"
+    if not order_dict.get("paymentStatus"):
+        order_dict["paymentStatus"] = "unpaid" if order_dict.get("paymentMethod") == "cod" else "paid"
     order_dict["created_at"] = datetime.now(timezone.utc)
     
     # Inventory Validation Logic

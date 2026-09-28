@@ -130,12 +130,17 @@ class OrderCreate(BaseModel):
     items: List[OrderItem]
     couponApplied: Optional[str] = None
     discountAmount: Optional[float] = 0.0
+    paymentStatus: Optional[str] = "unpaid"
+    paymentId: Optional[str] = None
+    order_number: Optional[str] = None
 
 class OrderResponse(OrderCreate):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     order_number: str
     user_id: Optional[str] = None
     status: str = "pending"
+    paymentStatus: Optional[str] = "unpaid"
+    paymentId: Optional[str] = None
     created_at: datetime
     is_deleted: bool = False
     tracking_number: Optional[str] = None
