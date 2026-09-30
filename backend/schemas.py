@@ -371,6 +371,7 @@ class BroadcastRequest(BaseModel):
 # Testimonial Schemas
 class TestimonialBase(BaseModel):
     video_url: str
+    direct_url: Optional[str] = None
     title: Optional[str] = None
     product_ids: List[str] = []
     is_active: bool = True
@@ -381,6 +382,7 @@ class TestimonialCreate(TestimonialBase):
 
 class TestimonialUpdate(BaseModel):
     video_url: Optional[str] = None
+    direct_url: Optional[str] = None
     title: Optional[str] = None
     product_ids: Optional[List[str]] = None
     is_active: Optional[bool] = None
@@ -393,3 +395,4 @@ class TestimonialResponse(TestimonialBase):
     class Config:
         populate_by_name = True
         arbitrary_types_allowed = True
+

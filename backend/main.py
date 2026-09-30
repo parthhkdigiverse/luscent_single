@@ -21,7 +21,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, RedirectResponse
 from dotenv import load_dotenv
 
 from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection, testimonials_collection
@@ -2035,6 +2035,75 @@ async def update_return_status(return_id: str, return_update: schemas.ReturnUpda
         
     return {"message": "Return record updated successfully"}
 
+def resolve_direct_video_url(url: str) -> Optional[str]:
+    if not url:
+        return None
+    
+    # Handle Google Drive Links
+    if 'drive.google.com' in url or 'docs.google.com' in url:
+        file_id = None
+        if '/file/d/' in url:
+            file_id = url.split('/file/d/')[1].split('/')[0].split('?')[0]
+        elif 'id=' in url:
+            file_id = url.split('id=')[1].split('&')[0]
+        if file_id:
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+
+    return url
+
+@app.get("/api/resolve-video")
+async def resolve_video_endpoint(url: str):
+    direct = resolve_direct_video_url(url)
+    return {"original_url": url, "direct_url": direct or url}
+
+@app.get("/api/drive-thumbnail/{file_id}")
+async def get_drive_thumbnail(file_id: str):
+    urls_to_try = [
+        f"https://lh3.googleusercontent.com/d/{file_id}=w800",
+        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800"
+    ]
+    async with httpx.AsyncClient(follow_redirects=True, timeout=8.0) as client:
+        for u in urls_to_try:
+            try:
+                res = await client.get(u, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+                if res.status_code == 200 and len(res.content) > 500:
+                    return Response(content=res.content, media_type=res.headers.get("content-type", "image/jpeg"))
+            except Exception:
+                continue
+    raise HTTPException(status_code=404, detail="Thumbnail not found")
+
+@app.get("/api/drive-stream/{file_id}")
+async def stream_drive_video(file_id: str, request: Request):
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    range_header = request.headers.get("range")
+    if range_header:
+        headers["Range"] = range_header
+
+    urls_to_try = [
+        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
+        f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
+    ]
+
+    async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
+        for url in urls_to_try:
+            try:
+                res = await client.get(url, headers=headers)
+                if res.status_code in (200, 206) and len(res.content) > 500:
+                    media_type = res.headers.get("content-type", "video/mp4")
+                    if "text/html" in media_type and len(res.content) < 5000:
+                        continue
+                    return Response(
+                        content=res.content,
+                        status_code=res.status_code,
+                        media_type="video/mp4",
+                        headers={"Accept-Ranges": "bytes", "Content-Type": "video/mp4"}
+                    )
+            except Exception as e:
+                print(f"Error streaming drive file {file_id}: {e}")
+                continue
+
+    return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={file_id}")
+
 # --- Testimonials ---
 @app.get("/api/testimonials", response_model=List[schemas.TestimonialResponse])
 async def get_testimonials(product_id: Optional[str] = None):
@@ -2046,6 +2115,9 @@ async def get_testimonials(product_id: Optional[str] = None):
     testimonials = []
     async for doc in cursor:
         doc["id"] = str(doc["_id"])
+        if not doc.get("direct_url") and doc.get("video_url"):
+            # Resolve dynamically if missing
+            doc["direct_url"] = resolve_direct_video_url(doc["video_url"])
         testimonials.append(doc)
     return testimonials
 
@@ -2055,8 +2127,11 @@ async def get_admin_testimonials(current_user: dict = Depends(get_admin_user)):
     testimonials = []
     async for doc in cursor:
         doc["id"] = str(doc["_id"])
+        if not doc.get("direct_url") and doc.get("video_url"):
+            doc["direct_url"] = resolve_direct_video_url(doc["video_url"])
         testimonials.append(doc)
     return testimonials
+
 
 @app.post("/api/admin/testimonials", response_model=schemas.TestimonialResponse)
 async def create_testimonial(testimonial_data: schemas.TestimonialCreate, current_user: dict = Depends(get_admin_user)):
