@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import random
 import base64
 import httpx
@@ -2073,6 +2074,36 @@ async def get_drive_thumbnail(file_id: str):
                 continue
     raise HTTPException(status_code=404, detail="Thumbnail not found")
 
+DRIVE_RESOLVED_CACHE = {} # file_id -> (resolved_url, timestamp)
+
+async def resolve_drive_direct_url_cached(file_id: str) -> str:
+    now = datetime.now(timezone.utc).timestamp()
+    if file_id in DRIVE_RESOLVED_CACHE:
+        cached_url, cached_time = DRIVE_RESOLVED_CACHE[file_id]
+        if now - cached_time < 7200: # 2 hours cache
+            return cached_url
+
+    init_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
+        try:
+            r1 = await client.get(init_url, headers=headers)
+            dl_url = init_url
+            if "text/html" in r1.headers.get("content-type", ""):
+                uuid_match = re.search(r'name="uuid"\s+value="([^"]+)"', r1.text)
+                if uuid_match:
+                    uuid_val = uuid_match.group(1)
+                    dl_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&uuid={uuid_val}"
+                else:
+                    confirm_token = re.search(r'confirm=([0-9a-zA-Z_]+)', r1.text)
+                    if confirm_token:
+                        dl_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token.group(1)}"
+            DRIVE_RESOLVED_CACHE[file_id] = (dl_url, now)
+            return dl_url
+        except Exception as e:
+            print(f"Error resolving drive URL for {file_id}: {e}")
+            return init_url
+
 @app.get("/api/drive-stream/{file_id}")
 async def stream_drive_video(file_id: str, request: Request):
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -2080,54 +2111,74 @@ async def stream_drive_video(file_id: str, request: Request):
     if range_header:
         headers["Range"] = range_header
 
-    urls_to_try = [
-        f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t",
-        f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
-    ]
+    dl_url = await resolve_drive_direct_url_cached(file_id)
 
-    for url in urls_to_try:
-        client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
-        try:
-            req = client.build_request("GET", url, headers=headers)
-            r = await client.send(req, stream=True)
-            if r.status_code in (200, 206):
-                res_headers = {
-                    "Accept-Ranges": r.headers.get("Accept-Ranges", "bytes"),
-                    "Content-Type": "video/mp4",
-                }
-                if "Content-Length" in r.headers:
-                    res_headers["Content-Length"] = r.headers["Content-Length"]
-                if "Content-Range" in r.headers:
-                    res_headers["Content-Range"] = r.headers["Content-Range"]
+    client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+    try:
+        req = client.build_request("GET", dl_url, headers=headers)
+        r = await client.send(req, stream=True)
 
-                return StreamingResponse(
-                    r.aiter_bytes(chunk_size=64 * 1024),
-                    status_code=r.status_code,
-                    headers=res_headers,
-                    background=BackgroundTask(client.aclose)
-                )
-            await client.aclose()
-        except Exception as e:
-            print(f"Error in streaming drive file {file_id}: {e}")
-            await client.aclose()
+        if r.status_code in (200, 206) and "text/html" not in r.headers.get("content-type", ""):
+            res_headers = {
+                "Accept-Ranges": r.headers.get("Accept-Ranges", "bytes"),
+                "Content-Type": "video/mp4",
+            }
+            if "Content-Length" in r.headers:
+                res_headers["Content-Length"] = r.headers["Content-Length"]
+            if "Content-Range" in r.headers:
+                res_headers["Content-Range"] = r.headers["Content-Range"]
+
+            return StreamingResponse(
+                r.aiter_bytes(chunk_size=64 * 1024),
+                status_code=r.status_code,
+                headers=res_headers,
+                background=BackgroundTask(client.aclose)
+            )
+        else:
+            DRIVE_RESOLVED_CACHE.pop(file_id, None)
+        await client.aclose()
+    except Exception as e:
+        print(f"Error in streaming drive file {file_id}: {e}")
+        DRIVE_RESOLVED_CACHE.pop(file_id, None)
+        await client.aclose()
 
     return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={file_id}")
 
+async def prefetch_drive_urls_task(drive_ids: List[str]):
+    for file_id in drive_ids:
+        try:
+            await resolve_drive_direct_url_cached(file_id)
+        except Exception:
+            pass
+
 # --- Testimonials ---
 @app.get("/api/testimonials", response_model=List[schemas.TestimonialResponse])
-async def get_testimonials(product_id: Optional[str] = None):
+async def get_testimonials(product_id: Optional[str] = None, background_tasks: BackgroundTasks = BackgroundTasks()):
     query = {"is_active": {"$ne": False}}
     if product_id:
         query["product_ids"] = product_id
     
     cursor = testimonials_collection.find(query).sort("display_order", 1)
     testimonials = []
+    drive_ids_to_fetch = []
     async for doc in cursor:
         doc["id"] = str(doc["_id"])
+        url = doc.get("video_url", "")
+        if "drive.google.com" in url or "docs.google.com" in url:
+            file_id = None
+            if "/file/d/" in url:
+                file_id = url.split("/file/d/")[1].split("/")[0].split("?")[0]
+            elif "id=" in url:
+                file_id = url.split("id=")[1].split("&")[0]
+            if file_id:
+                drive_ids_to_fetch.append(file_id)
         if not doc.get("direct_url") and doc.get("video_url"):
-            # Resolve dynamically if missing
             doc["direct_url"] = resolve_direct_video_url(doc["video_url"])
         testimonials.append(doc)
+        
+    if drive_ids_to_fetch:
+        background_tasks.add_task(prefetch_drive_urls_task, drive_ids_to_fetch)
+        
     return testimonials
 
 @app.get("/api/admin/testimonials", response_model=List[schemas.TestimonialResponse])

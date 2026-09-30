@@ -296,6 +296,19 @@ const TestimonialsSection = ({ productId }) => {
         )}
       </div>
 
+      {/* Background Preloader for Instant (< 50ms) Video Playback */}
+      <div className="hidden pointer-events-none" aria-hidden="true">
+        {testimonials.map(item => (
+          <video 
+            key={`preload-${item.id}`} 
+            src={getStreamUrl(item)} 
+            preload="auto" 
+            muted 
+            playsInline
+          />
+        ))}
+      </div>
+
       {/* Fullscreen Video Modal (Stories Style) */}
       {activeItem && (
         <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center backdrop-blur-md p-4 sm:p-0">
