@@ -103,23 +103,29 @@ const TestimonialsSection = ({ productId }) => {
   };
 
   const getThumbnailUrl = (item) => {
-    if (!item || !item.video_url) return null;
+    if (!item) return null;
+    if (item.thumbnail_url) return item.thumbnail_url;
+    if (item.thumbnail) return item.thumbnail;
+    if (!item.video_url) return null;
     const { isYouTube, videoId, isInstagram, instaId, isGoogleDrive, driveId } = getVideoDetails(item.video_url);
 
-    if (isYouTube) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-    if (isInstagram) return `https://www.instagram.com/p/${instaId}/media/?size=l`;
-    if (isGoogleDrive && driveId) return `https://lh3.googleusercontent.com/d/${driveId}=s800`;
+    if (isYouTube && videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+    if (isGoogleDrive && driveId) {
+      const baseUrl = import.meta.env.VITE_API_URL || '';
+      return `${baseUrl}/api/drive-thumbnail/${driveId}`;
+    }
+    if (isInstagram && instaId) return `https://www.instagram.com/p/${instaId}/media/?size=l`;
     return null;
   };
 
   const renderThumbnail = (item, index) => {
-    if (!item.video_url) return null;
+    if (!item || !item.video_url) return null;
     const { isGoogleDrive, driveId } = getVideoDetails(item.video_url);
     const thumbUrl = getThumbnailUrl(item);
 
     return (
       <div 
-        className="w-full h-full cursor-pointer relative group bg-black rounded-2xl overflow-hidden shadow-md"
+        className="w-full h-full cursor-pointer relative group bg-gradient-to-br from-gray-900 via-stone-800 to-black rounded-2xl overflow-hidden shadow-md"
         onClick={() => setActiveIndex(index)}
       >
         {thumbUrl ? (
@@ -129,8 +135,12 @@ const TestimonialsSection = ({ productId }) => {
             className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
             onError={(e) => {
               if (isGoogleDrive && driveId) {
-                if (!e.target.dataset.triedLh3) {
-                  e.target.dataset.triedLh3 = "true";
+                if (!e.target.dataset.fallbackStep) {
+                  e.target.dataset.fallbackStep = "1";
+                  e.target.src = `https://lh3.googleusercontent.com/d/${driveId}=s800`;
+                  return;
+                } else if (e.target.dataset.fallbackStep === "1") {
+                  e.target.dataset.fallbackStep = "2";
                   e.target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`;
                   return;
                 }
@@ -164,6 +174,16 @@ const TestimonialsSection = ({ productId }) => {
     );
   };
 
+  const getStreamUrl = (item) => {
+    if (!item) return '';
+    const details = getVideoDetails(item.video_url);
+    if (details.isGoogleDrive && details.driveId) {
+      const baseUrl = import.meta.env.VITE_API_URL || '';
+      return `${baseUrl}/api/drive-stream/${details.driveId}`;
+    }
+    return item.direct_url || item.video_url || '';
+  };
+
   const activeItem = activeIndex !== null ? testimonials[activeIndex] : null;
   const activeDetails = activeItem ? getVideoDetails(activeItem.video_url) : null;
 
@@ -172,7 +192,7 @@ const TestimonialsSection = ({ productId }) => {
       setResolvedUrl(null);
       return;
     }
-    setResolvedUrl(activeItem.direct_url || activeItem.video_url);
+    setResolvedUrl(getStreamUrl(activeItem));
   }, [activeIndex, activeItem]);
 
   useEffect(() => {
@@ -222,7 +242,7 @@ const TestimonialsSection = ({ productId }) => {
   if (loading) return null;
   if (testimonials.length === 0) return null;
 
-  const displayVideoUrl = resolvedUrl || activeItem?.direct_url || activeItem?.video_url;
+  const displayVideoUrl = resolvedUrl || (activeItem ? getStreamUrl(activeItem) : '');
 
   return (
     <section className="py-16 px-4 md:px-8 bg-brand-bg">
@@ -278,11 +298,11 @@ const TestimonialsSection = ({ productId }) => {
 
       {/* Fullscreen Video Modal (Stories Style) */}
       {activeItem && (
-        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center backdrop-blur-md">
+        <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center backdrop-blur-md p-4 sm:p-0">
           
           <button 
             onClick={() => setActiveIndex(null)} 
-            className="absolute top-6 right-6 md:top-10 md:right-10 text-white/70 hover:text-white transition-colors p-2 z-50 bg-white/10 rounded-full hover:bg-white/20 cursor-pointer"
+            className="absolute top-4 right-4 md:top-8 md:right-8 text-white/70 hover:text-white transition-colors p-2 z-50 bg-white/10 rounded-full hover:bg-white/20 cursor-pointer"
           >
             <X className="w-6 h-6 md:w-8 md:h-8" />
           </button>
@@ -307,23 +327,15 @@ const TestimonialsSection = ({ productId }) => {
                 {getThumbnailUrl(testimonials[activeIndex - 1]) ? (
                   <img src={getThumbnailUrl(testimonials[activeIndex - 1])} alt="Previous" className="w-full h-full object-cover" />
                 ) : (
-                  <video src={`${testimonials[activeIndex - 1].video_url}#t=0.1`} className="w-full h-full object-cover" preload="metadata" />
+                  <video src={getStreamUrl(testimonials[activeIndex - 1])} className="w-full h-full object-cover" preload="metadata" />
                 )}
               </div>
             )}
 
-            {/* Main Video Container - Keep exact same size h-[85vh] aspect-[9/16] */}
-            <div className="h-[85vh] aspect-[9/16] relative rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-black z-20">
+            {/* Main Video Container - Keep exact same size aspect-[9/16] on both desktop & mobile */}
+            <div className="h-[80vh] sm:h-[85vh] max-h-[750px] aspect-[9/16] max-w-[90vw] relative rounded-2xl md:rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] bg-black z-20 flex items-center justify-center">
 
-              {activeDetails?.isGoogleDrive && activeDetails?.driveId ? (
-                <iframe
-                  src={`https://drive.google.com/file/d/${activeDetails.driveId}/preview?autoplay=1`}
-                  title={activeItem.title || "Video Testimonial"}
-                  className="w-full h-[calc(100%+60px)] -mt-[56px] border-0 relative z-10"
-                  allow="autoplay; encrypted-media; fullscreen"
-                  allowFullScreen
-                ></iframe>
-              ) : activeDetails?.isYouTube ? (
+              {activeDetails?.isYouTube ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${activeDetails.videoId}?autoplay=1&controls=1&rel=0&modestbranding=1&playsinline=1`}
                   title={activeItem.title || "Video Testimonial"}
@@ -354,7 +366,7 @@ const TestimonialsSection = ({ productId }) => {
                 {getThumbnailUrl(testimonials[activeIndex + 1]) ? (
                   <img src={getThumbnailUrl(testimonials[activeIndex + 1])} alt="Next" className="w-full h-full object-cover" />
                 ) : (
-                  <video src={`${testimonials[activeIndex + 1].video_url}#t=0.1`} className="w-full h-full object-cover" preload="metadata" />
+                  <video src={getStreamUrl(testimonials[activeIndex + 1])} className="w-full h-full object-cover" preload="metadata" />
                 )}
               </div>
             )}

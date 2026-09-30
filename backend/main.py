@@ -21,7 +21,8 @@ from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, Uplo
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response, RedirectResponse
+from fastapi.responses import FileResponse, Response, RedirectResponse, StreamingResponse
+from starlette.background import BackgroundTask
 from dotenv import load_dotenv
 
 from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection, testimonials_collection
@@ -2084,23 +2085,31 @@ async def stream_drive_video(file_id: str, request: Request):
         f"https://drive.google.com/uc?export=download&id={file_id}&confirm=t"
     ]
 
-    async with httpx.AsyncClient(follow_redirects=True, timeout=20.0) as client:
-        for url in urls_to_try:
-            try:
-                res = await client.get(url, headers=headers)
-                if res.status_code in (200, 206) and len(res.content) > 500:
-                    media_type = res.headers.get("content-type", "video/mp4")
-                    if "text/html" in media_type and len(res.content) < 5000:
-                        continue
-                    return Response(
-                        content=res.content,
-                        status_code=res.status_code,
-                        media_type="video/mp4",
-                        headers={"Accept-Ranges": "bytes", "Content-Type": "video/mp4"}
-                    )
-            except Exception as e:
-                print(f"Error streaming drive file {file_id}: {e}")
-                continue
+    for url in urls_to_try:
+        client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+        try:
+            req = client.build_request("GET", url, headers=headers)
+            r = await client.send(req, stream=True)
+            if r.status_code in (200, 206):
+                res_headers = {
+                    "Accept-Ranges": r.headers.get("Accept-Ranges", "bytes"),
+                    "Content-Type": "video/mp4",
+                }
+                if "Content-Length" in r.headers:
+                    res_headers["Content-Length"] = r.headers["Content-Length"]
+                if "Content-Range" in r.headers:
+                    res_headers["Content-Range"] = r.headers["Content-Range"]
+
+                return StreamingResponse(
+                    r.aiter_bytes(chunk_size=64 * 1024),
+                    status_code=r.status_code,
+                    headers=res_headers,
+                    background=BackgroundTask(client.aclose)
+                )
+            await client.aclose()
+        except Exception as e:
+            print(f"Error in streaming drive file {file_id}: {e}")
+            await client.aclose()
 
     return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={file_id}")
 
