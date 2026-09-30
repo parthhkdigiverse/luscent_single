@@ -186,14 +186,47 @@ const TestimonialsSection = ({ productId }) => {
     }
   }, [resolvedUrl, activeIndex]);
 
+  const scrollRef = useRef(null);
+  const [isHovered, setIsHovered] = useState(false);
+
+  useEffect(() => {
+    if (isHovered || activeIndex !== null || testimonials.length <= 1) return;
+
+    const interval = setInterval(() => {
+      if (scrollRef.current) {
+        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+        const maxScroll = scrollWidth - clientWidth;
+        const scrollAmount = 280;
+
+        if (scrollLeft >= maxScroll - 15) {
+          scrollRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+        } else {
+          scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+        }
+      }
+    }, 3500);
+
+    return () => clearInterval(interval);
+  }, [testimonials.length, isHovered, activeIndex]);
+
+  const scrollSection = (direction) => {
+    if (scrollRef.current) {
+      const scrollAmount = 300;
+      scrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   if (loading) return null;
   if (testimonials.length === 0) return null;
 
   const displayVideoUrl = resolvedUrl || activeItem?.direct_url || activeItem?.video_url;
 
   return (
-    <section className="py-16 px-4 bg-brand-bg">
-      <div className="max-w-6xl mx-auto">
+    <section className="py-16 px-4 md:px-8 bg-brand-bg">
+      <div className="max-w-7xl mx-auto">
         <div className="text-center mb-12">
           {headerTitle && (
             <h2 className="font-serif text-3xl md:text-4xl font-medium text-brand-dark mb-4">
@@ -207,16 +240,40 @@ const TestimonialsSection = ({ productId }) => {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {testimonials.map((item, idx) => (
+        {testimonials.length <= 4 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-7xl mx-auto">
+            {testimonials.map((item, idx) => (
+              <div 
+                key={item.id} 
+                className="bg-brand-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] relative aspect-[9/16]"
+              >
+                {renderThumbnail(item, idx)}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div 
+            className="relative px-2"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+          >
+            {/* Horizontally Auto-scrolling Slider */}
             <div 
-              key={item.id} 
-              className="bg-brand-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow relative aspect-[9/16]"
+              ref={scrollRef}
+              className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-none snap-x snap-mandatory py-3 px-2 scroll-smooth [&::-webkit-scrollbar]:hidden"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
-              {renderThumbnail(item, idx)}
+              {testimonials.map((item, idx) => (
+                <div 
+                  key={item.id} 
+                  className="flex-none w-[220px] sm:w-[250px] md:w-[270px] aspect-[9/16] bg-brand-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] relative snap-start"
+                >
+                  {renderThumbnail(item, idx)}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Fullscreen Video Modal (Stories Style) */}
