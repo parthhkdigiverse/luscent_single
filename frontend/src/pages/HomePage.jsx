@@ -6,6 +6,7 @@ import { Button } from "../components/Button";
 import { ProductCard } from "../components/ProductCard";
 import { TrustBadgeStrip } from "../components/TrustBadgeStrip";
 import { TestimonialCard } from "../components/TestimonialCard";
+import TestimonialsSection from "../components/TestimonialsSection";
 import { FAQAccordion } from "../components/FAQAccordion";
 import { ScrollReveal } from "../components/ScrollReveal";
 import { BeforeAfterComparison } from "../components/BeforeAfterComparison";
@@ -409,25 +410,30 @@ export const HomePage = () => {
         </ScrollReveal>
       </section>
 
-      {/* 9. Customer Testimonials */}
-      <section className="max-w-7xl mx-auto px-6 mt-24">
-        <div className="text-center max-w-2xl mx-auto mb-16">
-          <span className="text-[10px] tracking-widest uppercase font-semibold text-brand-grey mb-2 block">
-            LOVED BY USERS
-          </span>
-          <h2 className="font-serif text-3xl md:text-4xl font-medium text-brand-dark">
-            Real Reviews, Radiant Skin
-          </h2>
-        </div>
+      {/* 9. Video / Admin Testimonials */}
+      <TestimonialsSection />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-          {testimonialsList.slice(0, 3).map((item, index) => (
-            <ScrollReveal key={item.id || index}>
-              <TestimonialCard testimonial={item} />
-            </ScrollReveal>
-          ))}
-        </div>
-      </section>
+      {/* Customer Reviews */}
+      {testimonialsList && testimonialsList.length > 0 && (
+        <section className="max-w-7xl mx-auto px-6 mt-24">
+          <div className="text-center max-w-2xl mx-auto mb-16">
+            <span className="text-[10px] tracking-widest uppercase font-semibold text-brand-grey mb-2 block">
+              LOVED BY USERS
+            </span>
+            <h2 className="font-serif text-3xl md:text-4xl font-medium text-brand-dark">
+              Real Reviews, Radiant Skin
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            {testimonialsList.slice(0, 3).map((item, index) => (
+              <ScrollReveal key={item.id || index}>
+                <TestimonialCard testimonial={item} />
+              </ScrollReveal>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* 9. FAQ Preview */}
       <section className="max-w-3xl mx-auto px-6 mt-24">
