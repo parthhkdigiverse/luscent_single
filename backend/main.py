@@ -2083,10 +2083,10 @@ async def resolve_drive_direct_url_cached(file_id: str) -> str:
         if now - cached_time < 7200: # 2 hours cache
             return cached_url
 
-    init_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    init_url = f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}"
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    async with httpx.AsyncClient(follow_redirects=True, timeout=15.0) as client:
-        try:
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
             r1 = await client.get(init_url, headers=headers)
             dl_url = init_url
             if "text/html" in r1.headers.get("content-type", ""):
@@ -2100,9 +2100,10 @@ async def resolve_drive_direct_url_cached(file_id: str) -> str:
                         dl_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token.group(1)}"
             DRIVE_RESOLVED_CACHE[file_id] = (dl_url, now)
             return dl_url
-        except Exception as e:
-            print(f"Error resolving drive URL for {file_id}: {e}")
-            return init_url
+    except Exception as e:
+        print(f"Drive url resolve fallback for {file_id}: {e}")
+        DRIVE_RESOLVED_CACHE[file_id] = (init_url, now)
+        return init_url
 
 @app.get("/api/drive-stream/{file_id}")
 async def stream_drive_video(file_id: str, request: Request):
@@ -2113,7 +2114,7 @@ async def stream_drive_video(file_id: str, request: Request):
 
     dl_url = await resolve_drive_direct_url_cached(file_id)
 
-    client = httpx.AsyncClient(follow_redirects=True, timeout=30.0)
+    client = httpx.AsyncClient(follow_redirects=True, timeout=20.0)
     try:
         req = client.build_request("GET", dl_url, headers=headers)
         r = await client.send(req, stream=True)
@@ -2142,7 +2143,7 @@ async def stream_drive_video(file_id: str, request: Request):
         DRIVE_RESOLVED_CACHE.pop(file_id, None)
         await client.aclose()
 
-    return RedirectResponse(url=f"https://drive.google.com/uc?export=download&id={file_id}")
+    return RedirectResponse(url=f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}")
 
 async def prefetch_drive_urls_task(drive_ids: List[str]):
     for file_id in drive_ids:
