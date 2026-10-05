@@ -23,13 +23,23 @@ import { TrackPage } from "./pages/TrackPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { PolicyPage } from "./pages/PolicyPage";
 
-// Scroll to top on route change helper
+// Scroll to top or target element on route/hash change helper
 const ScrollToTop = () => {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
 
   useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [pathname]);
+    if (hash) {
+      setTimeout(() => {
+        const id = hash.replace("#", "");
+        const element = document.getElementById(id);
+        if (element) {
+          element.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 500);
+    } else {
+      window.scrollTo(0, 0);
+    }
+  }, [pathname, hash]);
 
   return null;
 };

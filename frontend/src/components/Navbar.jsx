@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { ShoppingBag, User, Menu, X, LogOut } from "lucide-react";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -14,6 +14,18 @@ export const Navbar = () => {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [announcementText, setAnnouncementText] = useState("");
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Handle "Shop All" click: if on home, smooth scroll; else navigate with hash
+  const handleShopAll = () => {
+    setIsMobileMenuOpen(false);
+    if (location.pathname === "/") {
+      const el = document.getElementById("our-essentials");
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    } else {
+      navigate("/#our-essentials");
+    }
+  };
 
   useEffect(() => {
     const fetchAnnouncement = async () => {
@@ -120,16 +132,12 @@ export const Navbar = () => {
               </>
             ) : (
               <>
-                <NavLink
-                  to="/"
-                  className={({ isActive }) =>
-                    `text-xs uppercase tracking-wider font-semibold transition-all duration-300 ${
-                      isActive ? "text-brand-accent" : "text-brand-dark hover:text-brand-accent"
-                    }`
-                  }
+                <button
+                  onClick={handleShopAll}
+                  className="text-xs uppercase tracking-wider font-semibold transition-all duration-300 text-brand-dark hover:text-brand-accent"
                 >
                   Shop All
-                </NavLink>
+                </button>
                 <NavLink
                   to="/category/sunscreen"
                   className={({ isActive }) =>
@@ -285,12 +293,12 @@ export const Navbar = () => {
                 </>
               ) : (
                 <>
-                  <NavLink
-                    to="/"
-                    className="text-xs uppercase tracking-wider font-semibold text-brand-dark py-2 border-b border-brand-card/30"
+                  <button
+                    onClick={handleShopAll}
+                    className="text-xs uppercase tracking-wider font-semibold text-brand-dark py-2 border-b border-brand-card/30 text-left w-full"
                   >
                     Shop All
-                  </NavLink>
+                  </button>
                   <NavLink
                     to="/category/sunscreen"
                     className="text-xs uppercase tracking-wider font-semibold text-brand-dark py-2 border-b border-brand-card/30"
