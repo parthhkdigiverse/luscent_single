@@ -5365,10 +5365,38 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
     }
   };
 
+  // Refresh the list while any video is still processing on Cloudinary
+  useEffect(() => {
+    if (!testimonials.some(t => t.status === "processing")) return;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetchAuth(`${API_URL}/api/admin/testimonials`);
+        if (res.ok) setTestimonials(await res.json());
+      } catch (err) {
+        console.error("Failed to refresh testimonials", err);
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [testimonials]);
+
+  const handleRetry = async (id) => {
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/testimonials/${id}/retry`, { method: "POST" });
+      if (res.ok) {
+        fetchTestimonials();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        alert(errorData.detail || "Failed to retry");
+      }
+    } catch (err) {
+      alert("Error retrying video");
+    }
+  };
+
   const handleOpenModal = (testimonial = null) => {
     if (testimonial) {
       setEditingId(testimonial.id || testimonial._id);
-      setVideoUrl(testimonial.video_url || "");
+      setVideoUrl(testimonial.drive_url || testimonial.video_url || "");
       setTitle(testimonial.title || "");
       setSelectedProducts(testimonial.product_ids || []);
       setIsActive(testimonial.is_active !== false);
@@ -5421,7 +5449,7 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
   const handleSave = async (e) => {
     e.preventDefault();
     const payload = {
-      video_url: videoUrl,
+      drive_url: videoUrl,
       title,
       product_ids: selectedProducts,
       is_active: isActive,
@@ -5448,7 +5476,8 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
         setShowModal(false);
         fetchTestimonials();
       } else {
-        alert("Failed to save testimonial");
+        const errorData = await res.json().catch(() => ({}));
+        alert(typeof errorData.detail === "string" ? errorData.detail : "Failed to save testimonial");
       }
     } catch (err) {
       alert("Error saving testimonial");
@@ -5525,7 +5554,25 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
                   <tr key={item.id || item._id} className="hover:bg-brand-bg/30 transition-colors">
                     <td className="py-4 px-6">
                       <div className="font-semibold text-brand-dark">{item.title || "Untitled"}</div>
-                      <div className="text-[10px] text-brand-grey truncate max-w-[200px] mt-1">{item.video_url}</div>
+                      <div className="text-[10px] text-brand-grey truncate max-w-[200px] mt-1">{item.drive_url || item.video_url}</div>
+                      <div className="mt-2 flex items-center gap-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                          item.status === "ready" ? "bg-green-100 text-green-700"
+                          : item.status === "failed" ? "bg-red-100 text-red-700"
+                          : item.status === "processing" ? "bg-amber-100 text-amber-700"
+                          : "bg-gray-100 text-gray-600"
+                        }`}>
+                          {item.status === "ready" ? "Ready" : item.status === "failed" ? "Failed" : item.status === "processing" ? "Processing" : "Not migrated"}
+                        </span>
+                        {(item.status === "failed" || !item.status || (item.status === "ready" && item.error)) && (
+                          <button onClick={() => handleRetry(item.id || item._id)} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-brand-card text-brand-dark hover:bg-brand-dark hover:text-white transition-colors">
+                            <RotateCcw size={10} /> {item.status === "failed" ? "Retry" : item.status === "ready" ? "Re-process" : "Migrate"}
+                          </button>
+                        )}
+                      </div>
+                      {item.error && (
+                        <div className={`text-[10px] mt-1 max-w-[260px] whitespace-normal ${item.status === "failed" ? "text-red-600" : "text-amber-700"}`}>{item.error}</div>
+                      )}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex flex-wrap gap-1">
@@ -5567,9 +5614,9 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
             
             <form onSubmit={handleSave} className="space-y-5">
               <div>
-                <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Video URL / Link *</label>
-                <input type="url" required value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="e.g. YouTube shorts link, mp4 URL" className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark" />
-                <p className="text-[10px] text-brand-grey mt-1">Accepts direct video URLs or YouTube links.</p>
+                <label className="block text-xs font-semibold text-brand-dark mb-1.5 uppercase tracking-wider">Google Drive Video Link *</label>
+                <input type="url" required value={videoUrl} onChange={e => setVideoUrl(e.target.value)} placeholder="https://drive.google.com/file/d/.../view" className="w-full px-4 py-3 bg-brand-bg border border-brand-card/50 rounded-xl text-sm focus:outline-none focus:border-brand-dark focus:ring-1 focus:ring-brand-dark" />
+                <p className="text-[10px] text-brand-grey mt-1">Drive link "Anyone with the link" par set hovi joie. Save pachhi video Cloudinary par process thase (status: Processing → Ready). Moto video automatically compress thai jase.</p>
               </div>
 
               <div>

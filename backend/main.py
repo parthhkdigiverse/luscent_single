@@ -1,6 +1,7 @@
 import os
 import sys
 import re
+import json
 import random
 import base64
 import httpx
@@ -17,6 +18,7 @@ from bson import ObjectId
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from label_generator import generate_custom_label_pdf
+import cloudinary_videos
 
 from fastapi import FastAPI, Depends, HTTPException, status, Body, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
@@ -192,6 +194,9 @@ async def startup_event():
         print("MongoDB users and orders collection indexes initialized.")
     except Exception as e:
         print("Index creation warning:", e)
+
+    # Continue testimonial videos interrupted by a restart; keep a reference so the task isn't collected
+    app.state.video_resume_task = asyncio.create_task(cloudinary_videos.resume_processing(testimonials_collection))
 
     # Seed products if empty
     count = await products_collection.count_documents({})
@@ -2037,222 +2042,150 @@ async def update_return_status(return_id: str, return_update: schemas.ReturnUpda
         
     return {"message": "Return record updated successfully"}
 
-def resolve_direct_video_url(url: str) -> Optional[str]:
-    if not url:
-        return None
-    
-    # Handle Google Drive Links
-    if 'drive.google.com' in url or 'docs.google.com' in url:
-        file_id = None
-        if '/file/d/' in url:
-            file_id = url.split('/file/d/')[1].split('/')[0].split('?')[0]
-        elif 'id=' in url:
-            file_id = url.split('id=')[1].split('&')[0]
-        if file_id:
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
-
-    return url
-
-@app.get("/api/resolve-video")
-async def resolve_video_endpoint(url: str):
-    direct = resolve_direct_video_url(url)
-    return {"original_url": url, "direct_url": direct or url}
-
-@app.get("/api/drive-thumbnail/{file_id}")
-async def get_drive_thumbnail(file_id: str):
-    urls_to_try = [
-        f"https://lh3.googleusercontent.com/d/{file_id}=w800",
-        f"https://drive.google.com/thumbnail?id={file_id}&sz=w800"
-    ]
-    async with httpx.AsyncClient(follow_redirects=True, timeout=8.0) as client:
-        for u in urls_to_try:
-            try:
-                res = await client.get(u, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
-                if res.status_code == 200 and len(res.content) > 500:
-                    return Response(content=res.content, media_type=res.headers.get("content-type", "image/jpeg"))
-            except Exception:
-                continue
-    raise HTTPException(status_code=404, detail="Thumbnail not found")
-
-DRIVE_RESOLVED_CACHE = {} # file_id -> (resolved_url, timestamp)
-
-async def resolve_drive_direct_url_cached(file_id: str) -> str:
-    now = datetime.now(timezone.utc).timestamp()
-    if file_id in DRIVE_RESOLVED_CACHE:
-        cached_url, cached_time = DRIVE_RESOLVED_CACHE[file_id]
-        if now - cached_time < 7200: # 2 hours cache
-            return cached_url
-
-    init_url = f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+# --- Testimonials (Google Drive link -> Cloudinary) ---
+def _testimonial_id_query(testimonial_id: str) -> dict:
+    conditions = [{"_id": testimonial_id}, {"id": testimonial_id}]
     try:
-        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as client:
-            r1 = await client.get(init_url, headers=headers)
-            dl_url = init_url
-            if "text/html" in r1.headers.get("content-type", ""):
-                uuid_match = re.search(r'name="uuid"\s+value="([^"]+)"', r1.text)
-                if uuid_match:
-                    uuid_val = uuid_match.group(1)
-                    dl_url = f"https://drive.usercontent.google.com/download?id={file_id}&export=download&confirm=t&uuid={uuid_val}"
-                else:
-                    confirm_token = re.search(r'confirm=([0-9a-zA-Z_]+)', r1.text)
-                    if confirm_token:
-                        dl_url = f"https://drive.google.com/uc?export=download&id={file_id}&confirm={confirm_token.group(1)}"
-            DRIVE_RESOLVED_CACHE[file_id] = (dl_url, now)
-            return dl_url
-    except Exception as e:
-        print(f"Drive url resolve fallback for {file_id}: {e}")
-        DRIVE_RESOLVED_CACHE[file_id] = (init_url, now)
-        return init_url
+        conditions.insert(0, {"_id": ObjectId(testimonial_id)})
+    except Exception:
+        pass
+    return {"$or": conditions}
 
-@app.get("/api/drive-stream/{file_id}")
-async def stream_drive_video(file_id: str, request: Request):
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    range_header = request.headers.get("range")
-    if range_header:
-        headers["Range"] = range_header
+def _validated_drive_file_id(drive_url: str) -> str:
+    file_id = cloudinary_videos.extract_drive_file_id(drive_url)
+    if not file_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Fakt Google Drive file link j chale (https://drive.google.com/file/d/<ID>/view ke ?id=<ID>).",
+        )
+    return file_id
 
-    dl_url = await resolve_drive_direct_url_cached(file_id)
+async def _ensure_unique_drive_file(file_id: str, exclude_id=None):
+    query = {"drive_file_id": file_id}
+    if exclude_id is not None:
+        query["_id"] = {"$ne": exclude_id}
+    if await testimonials_collection.find_one(query, {"_id": 1}):
+        raise HTTPException(status_code=409, detail="Aa Drive video valo testimonial pehla thi chhe.")
 
-    client = httpx.AsyncClient(follow_redirects=True, timeout=20.0)
-    try:
-        req = client.build_request("GET", dl_url, headers=headers)
-        r = await client.send(req, stream=True)
+def _admin_testimonial(doc: dict) -> dict:
+    doc["id"] = str(doc["_id"])
+    return doc
 
-        if r.status_code in (200, 206) and "text/html" not in r.headers.get("content-type", ""):
-            res_headers = {
-                "Accept-Ranges": r.headers.get("Accept-Ranges", "bytes"),
-                "Content-Type": "video/mp4",
-            }
-            if "Content-Length" in r.headers:
-                res_headers["Content-Length"] = r.headers["Content-Length"]
-            if "Content-Range" in r.headers:
-                res_headers["Content-Range"] = r.headers["Content-Range"]
-
-            return StreamingResponse(
-                r.aiter_bytes(chunk_size=64 * 1024),
-                status_code=r.status_code,
-                headers=res_headers,
-                background=BackgroundTask(client.aclose)
-            )
-        else:
-            DRIVE_RESOLVED_CACHE.pop(file_id, None)
-        await client.aclose()
-    except Exception as e:
-        print(f"Error in streaming drive file {file_id}: {e}")
-        DRIVE_RESOLVED_CACHE.pop(file_id, None)
-        await client.aclose()
-
-    return RedirectResponse(url=f"https://drive.google.com/uc?export=download&confirm=t&id={file_id}")
-
-async def prefetch_drive_urls_task(drive_ids: List[str]):
-    for file_id in drive_ids:
-        try:
-            await resolve_drive_direct_url_cached(file_id)
-        except Exception:
-            pass
-
-# --- Testimonials ---
-@app.get("/api/testimonials", response_model=List[schemas.TestimonialResponse])
-async def get_testimonials(product_id: Optional[str] = None, background_tasks: BackgroundTasks = BackgroundTasks()):
-    query = {"is_active": {"$ne": False}}
+@app.get("/api/testimonials", response_model=List[schemas.PublicTestimonialResponse])
+async def get_testimonials(product_id: Optional[str] = None):
+    """Public: only ready videos, never the Drive link."""
+    query = {"is_active": {"$ne": False}, "status": "ready", "video_url": {"$nin": [None, ""]}}
     if product_id:
         query["product_ids"] = product_id
-    
-    cursor = testimonials_collection.find(query).sort("display_order", 1)
-    testimonials = []
-    drive_ids_to_fetch = []
-    async for doc in cursor:
-        doc["id"] = str(doc["_id"])
-        url = doc.get("video_url", "")
-        if "drive.google.com" in url or "docs.google.com" in url:
-            file_id = None
-            if "/file/d/" in url:
-                file_id = url.split("/file/d/")[1].split("/")[0].split("?")[0]
-            elif "id=" in url:
-                file_id = url.split("id=")[1].split("&")[0]
-            if file_id:
-                drive_ids_to_fetch.append(file_id)
-        if not doc.get("direct_url") and doc.get("video_url"):
-            doc["direct_url"] = resolve_direct_video_url(doc["video_url"])
-        testimonials.append(doc)
-        
-    if drive_ids_to_fetch:
-        background_tasks.add_task(prefetch_drive_urls_task, drive_ids_to_fetch)
-        
-    return testimonials
+    projection = {"title": 1, "video_url": 1, "thumbnail_url": 1}
+    cursor = testimonials_collection.find(query, projection).sort("display_order", 1)
+    return [
+        {"id": str(doc["_id"]), "title": doc.get("title"), "video_url": doc["video_url"], "thumbnail_url": doc.get("thumbnail_url")}
+        async for doc in cursor
+    ]
 
 @app.get("/api/admin/testimonials", response_model=List[schemas.TestimonialResponse])
 async def get_admin_testimonials(current_user: dict = Depends(get_admin_user)):
     cursor = testimonials_collection.find({}).sort("display_order", 1)
-    testimonials = []
-    async for doc in cursor:
-        doc["id"] = str(doc["_id"])
-        if not doc.get("direct_url") and doc.get("video_url"):
-            doc["direct_url"] = resolve_direct_video_url(doc["video_url"])
-        testimonials.append(doc)
-    return testimonials
-
+    return [_admin_testimonial(doc) async for doc in cursor]
 
 @app.post("/api/admin/testimonials", response_model=schemas.TestimonialResponse)
-async def create_testimonial(testimonial_data: schemas.TestimonialCreate, current_user: dict = Depends(get_admin_user)):
+async def create_testimonial(testimonial_data: schemas.TestimonialCreate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+    file_id = _validated_drive_file_id(testimonial_data.drive_url)
+    await _ensure_unique_drive_file(file_id)
+
     test_dict = testimonial_data.dict()
-    test_dict["created_at"] = datetime.utcnow()
-    
+    test_dict.update({
+        "drive_url": testimonial_data.drive_url.strip(),
+        "drive_file_id": file_id,
+        "cloudinary_public_id": None,
+        "status": "processing",
+        "video_url": None,
+        "thumbnail_url": None,
+        "error": None,
+        "created_at": datetime.utcnow(),
+    })
     result = await testimonials_collection.insert_one(test_dict)
-    test_dict["id"] = str(result.inserted_id)
-    return test_dict
+    background_tasks.add_task(cloudinary_videos.process_testimonial_video, testimonials_collection, result.inserted_id, file_id)
+    return _admin_testimonial(test_dict)
 
 @app.put("/api/admin/testimonials/{testimonial_id}")
-async def update_testimonial(testimonial_id: str, testimonial_update: schemas.TestimonialUpdate, current_user: dict = Depends(get_admin_user)):
-    from bson import ObjectId
-    query_conditions = []
-    try:
-        query_conditions.append({"_id": ObjectId(testimonial_id)})
-    except Exception:
-        pass
-    query_conditions.append({"_id": testimonial_id})
-    query_conditions.append({"id": testimonial_id})
+async def update_testimonial(testimonial_id: str, testimonial_update: schemas.TestimonialUpdate, background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+    existing = await testimonials_collection.find_one(_testimonial_id_query(testimonial_id))
+    if not existing:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
 
     update_data = {k: v for k, v in testimonial_update.dict(exclude_unset=True).items() if v is not None}
-    
     if not update_data:
         return {"message": "No fields to update"}
-        
-    updated = False
-    for cond in query_conditions:
-        result = await testimonials_collection.update_one(cond, {"$set": update_data})
-        if result.matched_count > 0:
-            updated = True
-            break
-            
-    if not updated:
-        raise HTTPException(status_code=404, detail="Testimonial not found")
-        
+
+    new_file_id = None
+    if "drive_url" in update_data:
+        file_id = _validated_drive_file_id(update_data["drive_url"])
+        update_data["drive_url"] = update_data["drive_url"].strip()
+        if file_id != existing.get("drive_file_id"):
+            await _ensure_unique_drive_file(file_id, exclude_id=existing["_id"])
+            new_file_id = file_id
+            update_data.update({
+                "drive_file_id": file_id,
+                "cloudinary_public_id": None,
+                "status": "processing",
+                "video_url": None,
+                "thumbnail_url": None,
+                "error": None,
+            })
+
+    await testimonials_collection.update_one({"_id": existing["_id"]}, {"$set": update_data})
+
+    if new_file_id:
+        # Video changed: remove the old one from Cloudinary and process the new link
+        background_tasks.add_task(cloudinary_videos.delete_from_cloudinary, existing.get("cloudinary_public_id"))
+        background_tasks.add_task(cloudinary_videos.process_testimonial_video, testimonials_collection, existing["_id"], new_file_id)
+        return {"message": "Testimonial updated; new video is processing", "status": "processing"}
+
     return {"message": "Testimonial updated successfully"}
+
+@app.post("/api/admin/testimonials/{testimonial_id}/retry")
+async def retry_testimonial_video(testimonial_id: str, background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
+    existing = await testimonials_collection.find_one(_testimonial_id_query(testimonial_id))
+    if not existing:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    # Old (not yet migrated) rows kept the Drive link in video_url
+    drive_url = existing.get("drive_url") or existing.get("video_url") or ""
+    file_id = existing.get("drive_file_id") or _validated_drive_file_id(drive_url)
+    await _ensure_unique_drive_file(file_id, exclude_id=existing["_id"])
+
+    update = {"drive_url": drive_url, "drive_file_id": file_id, "status": "processing", "error": None}
+    if not existing.get("status"):
+        update.update({"video_url": None, "thumbnail_url": None})
+    await testimonials_collection.update_one({"_id": existing["_id"]}, {"$set": update})
+    background_tasks.add_task(cloudinary_videos.process_testimonial_video, testimonials_collection, existing["_id"], file_id)
+    return {"message": "Retry started", "status": "processing"}
 
 @app.delete("/api/admin/testimonials/{testimonial_id}")
 async def delete_testimonial(testimonial_id: str, current_user: dict = Depends(get_admin_user)):
-    from bson import ObjectId
-    query_conditions = []
-    try:
-        query_conditions.append({"_id": ObjectId(testimonial_id)})
-    except Exception:
-        pass
-    query_conditions.append({"_id": testimonial_id})
-    query_conditions.append({"id": testimonial_id})
-
-    deleted = False
-    for cond in query_conditions:
-        res = await testimonials_collection.delete_one(cond)
-        if res.deleted_count > 0:
-            deleted = True
-            break
-
-    if not deleted:
+    existing = await testimonials_collection.find_one(_testimonial_id_query(testimonial_id))
+    if not existing:
         raise HTTPException(status_code=404, detail="Testimonial not found")
-    
+
+    await cloudinary_videos.delete_from_cloudinary(existing.get("cloudinary_public_id"))
+    await testimonials_collection.delete_one({"_id": existing["_id"]})
     return {"message": "Testimonial deleted successfully"}
+
+@app.post("/api/cloudinary/webhook")
+async def cloudinary_webhook(request: Request):
+    """Cloudinary eager-transformation notifications (set CLOUDINARY_NOTIFICATION_URL to this URL)."""
+    body = (await request.body()).decode("utf-8")
+    timestamp = request.headers.get("X-Cld-Timestamp", "")
+    signature = request.headers.get("X-Cld-Signature", "")
+    if not cloudinary_videos.verify_webhook(body, timestamp, signature):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+    await cloudinary_videos.handle_eager_notification(testimonials_collection, payload)
+    return {"ok": True}
 
 # --- Serve Frontend ---
 dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../frontend/dist")

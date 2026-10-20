@@ -370,26 +370,36 @@ class BroadcastRequest(BaseModel):
 
 # Testimonial Schemas
 class TestimonialBase(BaseModel):
-    video_url: str
-    direct_url: Optional[str] = None
     title: Optional[str] = None
     product_ids: List[str] = []
     is_active: bool = True
     display_order: int = 0
 
 class TestimonialCreate(TestimonialBase):
-    pass
+    drive_url: str
 
 class TestimonialUpdate(BaseModel):
-    video_url: Optional[str] = None
-    direct_url: Optional[str] = None
+    drive_url: Optional[str] = None
     title: Optional[str] = None
     product_ids: Optional[List[str]] = None
     is_active: Optional[bool] = None
     display_order: Optional[int] = None
 
+class PublicTestimonialResponse(BaseModel):
+    id: str
+    title: Optional[str] = None
+    video_url: str
+    thumbnail_url: Optional[str] = None
+
 class TestimonialResponse(TestimonialBase):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    drive_url: Optional[str] = None
+    drive_file_id: Optional[str] = None
+    cloudinary_public_id: Optional[str] = None
+    status: Optional[str] = None  # processing / ready / failed
+    video_url: Optional[str] = None
+    thumbnail_url: Optional[str] = None
+    error: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:

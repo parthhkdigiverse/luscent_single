@@ -30,13 +30,12 @@ const TestimonialsSection = ({ productId }) => {
 
     const fetchTestimonials = async () => {
       try {
-        const url = productId 
+        const url = productId
           ? `/api/testimonials?product_id=${productId}`
           : '/api/testimonials';
         const res = await fetch(`${API_URL}${url}`);
         if (res.ok) {
-          const data = await res.json();
-          setTestimonials(data.filter(t => t.is_active !== false));
+          setTestimonials(await res.json());
         }
       } catch (error) {
         console.error("Failed to fetch testimonials:", error);
@@ -48,72 +47,6 @@ const TestimonialsSection = ({ productId }) => {
     fetchContent();
     fetchTestimonials();
   }, [productId]);
-
-  const getVideoDetails = (url) => {
-    if (!url) return { isYouTube: false, isInstagram: false, isGoogleDrive: false };
-
-    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
-    let videoId = '';
-    if (isYouTube) {
-      if (url.includes('youtu.be/')) {
-        videoId = url.split('youtu.be/')[1].split('?')[0].split('/')[0];
-      } else if (url.includes('youtube.com/shorts/')) {
-        videoId = url.split('youtube.com/shorts/')[1].split('?')[0].split('/')[0];
-      } else if (url.includes('watch?v=')) {
-        videoId = url.split('watch?v=')[1].split('&')[0].split('#')[0];
-      } else if (url.includes('youtube.com/embed/')) {
-        videoId = url.split('youtube.com/embed/')[1].split('?')[0].split('/')[0];
-      }
-    }
-
-    const isInstagram = url.includes('instagram.com') || url.includes('instagr.am');
-    let instaId = '';
-    if (isInstagram) {
-      if (url.includes('/reel/')) {
-        instaId = url.split('/reel/')[1].split('/')[0].split('?')[0];
-      } else if (url.includes('/p/')) {
-        instaId = url.split('/p/')[1].split('/')[0].split('?')[0];
-      } else if (url.includes('/reels/')) {
-        instaId = url.split('/reels/')[1].split('/')[0].split('?')[0];
-      }
-    }
-
-    const isGoogleDrive = url.includes('drive.google.com') || url.includes('docs.google.com');
-    let driveId = '';
-    if (isGoogleDrive) {
-      if (url.includes('/file/d/')) {
-        driveId = url.split('/file/d/')[1].split('/')[0].split('?')[0];
-      } else if (url.includes('id=')) {
-        driveId = url.split('id=')[1].split('&')[0];
-      }
-    }
-
-    return { isYouTube, videoId, isInstagram, instaId, isGoogleDrive, driveId };
-  };
-
-  const getThumbnailUrl = (item) => {
-    if (!item) return null;
-    if (item.thumbnail_url) return item.thumbnail_url;
-    if (item.thumbnail) return item.thumbnail;
-    if (!item.video_url) return null;
-    const { isYouTube, videoId, isInstagram, instaId, isGoogleDrive, driveId } = getVideoDetails(item.video_url);
-
-    if (isYouTube && videoId) return `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-    if (isGoogleDrive && driveId) {
-      return `${API_URL}/api/drive-thumbnail/${driveId}`;
-    }
-    if (isInstagram && instaId) return `https://www.instagram.com/p/${instaId}/media/?size=l`;
-    return null;
-  };
-
-  const getStreamUrl = (item) => {
-    if (!item) return '';
-    const details = getVideoDetails(item.video_url);
-    if (details.isGoogleDrive && details.driveId) {
-      return `${API_URL}/api/drive-stream/${details.driveId}`;
-    }
-    return item.direct_url || item.video_url || '';
-  };
 
   const scrollRef = useRef(null);
   const [isHovered, setIsHovered] = useState(false);
@@ -144,17 +77,13 @@ const TestimonialsSection = ({ productId }) => {
     if (playingIndex !== index) {
       setPlayingIndex(index);
       setIsPaused(false);
-    } else {
-      if (videoRef.current) {
-        if (videoRef.current.paused) {
-          videoRef.current.play();
-          setIsPaused(false);
-        } else {
-          videoRef.current.pause();
-          setIsPaused(true);
-        }
+    } else if (videoRef.current) {
+      if (videoRef.current.paused) {
+        videoRef.current.play();
+        setIsPaused(false);
       } else {
-        setIsPaused(prev => !prev);
+        videoRef.current.pause();
+        setIsPaused(true);
       }
     }
   };
@@ -162,50 +91,41 @@ const TestimonialsSection = ({ productId }) => {
   const renderCard = (item, index) => {
     if (!item || !item.video_url) return null;
     const isPlaying = playingIndex === index;
-    const { isGoogleDrive, driveId, isYouTube, videoId } = getVideoDetails(item.video_url);
-    const thumbUrl = getThumbnailUrl(item);
-    const streamUrl = getStreamUrl(item);
+    const thumbUrl = item.thumbnail_url;
 
     return (
-      <div 
+      <div
         key={item.id || index}
         className="w-full h-full relative group bg-stone-950 rounded-2xl overflow-hidden shadow-lg border border-stone-800/80 flex items-center justify-center cursor-pointer"
         onClick={(e) => togglePlayPause(e, index)}
       >
         {/* Ambient blurred backdrop so video fits 100% cleanly without empty borders */}
         {thumbUrl && (
-          <img 
-            src={thumbUrl} 
-            alt="" 
-            className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 pointer-events-none scale-110" 
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            className="absolute inset-0 w-full h-full object-cover blur-xl opacity-40 pointer-events-none scale-110"
           />
         )}
 
         {isPlaying ? (
           <div className="relative w-full h-full flex items-center justify-center z-10 bg-black">
-            {isYouTube && videoId ? (
-              <iframe
-                src={`https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&rel=0&modestbranding=1&playsinline=1`}
-                title={item.title || "Video Testimonial"}
-                className="w-full h-full border-0 rounded-2xl pointer-events-none"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            ) : (
-              <video 
-                ref={videoRef}
-                src={streamUrl} 
-                autoPlay
-                playsInline
-                preload="metadata"
-                onEnded={() => setIsPaused(true)}
-                onPlay={() => setIsPaused(false)}
-                onPause={() => setIsPaused(true)}
-                className="w-full h-full object-contain rounded-2xl"
-              />
-            )}
+            <video
+              ref={videoRef}
+              src={item.video_url}
+              poster={thumbUrl || undefined}
+              autoPlay
+              playsInline
+              preload="auto"
+              onEnded={() => setIsPaused(true)}
+              onPlay={() => setIsPaused(false)}
+              onPause={() => setIsPaused(true)}
+              className="w-full h-full object-contain rounded-2xl"
+            />
 
             {/* Top Right Play / Pause Toggle Button */}
-            <button 
+            <button
               type="button"
               onClick={(e) => togglePlayPause(e, index)}
               className="absolute top-3 right-3 w-9 h-9 bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center text-white hover:bg-black/80 transition-all z-30 shadow-lg border border-white/30 cursor-pointer"
@@ -227,24 +147,12 @@ const TestimonialsSection = ({ productId }) => {
         ) : (
           <div className="w-full h-full relative group flex items-center justify-center">
             {thumbUrl ? (
-              <img 
-                src={thumbUrl} 
-                alt={item.title || "Video Testimonial"} 
+              <img
+                src={thumbUrl}
+                alt={item.title || "Video Testimonial"}
+                loading="lazy"
                 className="w-full h-full object-contain relative z-10 transition-transform duration-500 group-hover:scale-[1.02]"
-                onError={(e) => {
-                  if (isGoogleDrive && driveId) {
-                    if (!e.target.dataset.fallbackStep) {
-                      e.target.dataset.fallbackStep = "1";
-                      e.target.src = `https://lh3.googleusercontent.com/d/${driveId}=s800`;
-                      return;
-                    } else if (e.target.dataset.fallbackStep === "1") {
-                      e.target.dataset.fallbackStep = "2";
-                      e.target.src = `https://drive.google.com/thumbnail?id=${driveId}&sz=w800`;
-                      return;
-                    }
-                  }
-                  e.target.style.display = 'none';
-                }}
+                onError={(e) => { e.target.style.display = 'none'; }}
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center bg-stone-900 text-stone-400 p-4 relative z-10">
@@ -299,8 +207,8 @@ const TestimonialsSection = ({ productId }) => {
         {testimonials.length <= 4 ? (
           <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 max-w-7xl mx-auto">
             {testimonials.map((item, idx) => (
-              <div 
-                key={item.id || idx} 
+              <div
+                key={item.id || idx}
                 className="bg-brand-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] relative aspect-[9/16]"
               >
                 {renderCard(item, idx)}
@@ -308,20 +216,20 @@ const TestimonialsSection = ({ productId }) => {
             ))}
           </div>
         ) : (
-          <div 
+          <div
             className="relative px-2"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
           >
             {/* Horizontally Auto-scrolling Slider */}
-            <div 
+            <div
               ref={scrollRef}
               className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-none snap-x snap-mandatory py-3 px-2 scroll-smooth [&::-webkit-scrollbar]:hidden"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               {testimonials.map((item, idx) => (
-                <div 
-                  key={item.id || idx} 
+                <div
+                  key={item.id || idx}
                   className="flex-none w-[220px] sm:w-[250px] md:w-[270px] aspect-[9/16] bg-brand-card rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 hover:scale-[1.02] relative snap-start"
                 >
                   {renderCard(item, idx)}
