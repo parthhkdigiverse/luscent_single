@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, useState } from "react";
+import { API_URL } from "../config";
 
 const CartContext = createContext(null);
 
@@ -80,6 +81,23 @@ export const CartProvider = ({ children }) => {
 
   const [toast, setToast] = useState(null);
 
+  // Fire-and-forget: log add-to-cart activity for the admin panel
+  const trackCartEvent = (product, quantity) => {
+    const token = localStorage.getItem("luscent_token");
+    fetch(`${API_URL}/api/cart-events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "Authorization": `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        product_id: String(product.id),
+        product_name: product.name || String(product.id),
+        quantity
+      })
+    }).catch(() => {});
+  };
+
   const addToCart = (product, quantity = 1) => {
     dispatch({ type: "ADD_TO_CART", payload: { product, quantity } });
     setToast({
@@ -87,6 +105,7 @@ export const CartProvider = ({ children }) => {
       product,
       quantity
     });
+    trackCartEvent(product, quantity);
   };
 
   const removeFromCart = (productId) => {

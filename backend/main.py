@@ -28,7 +28,7 @@ from fastapi.responses import FileResponse, Response, RedirectResponse, Streamin
 from starlette.background import BackgroundTask
 from dotenv import load_dotenv
 
-from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection, testimonials_collection
+from database import users_collection, products_collection, orders_collection, contacts_collection, coupons_collection, settings_collection, content_collection, inventory_collection, inventory_history_collection, reviews_collection, returns_collection, subscribers_collection, testimonials_collection, cart_events_collection
 from schemas import (
     UserCreate, UserResponse, Token, ForgotPasswordRequest, ResetPasswordRequest, ChangePasswordRequest,
     ProductResponse, OrderCreate, OrderResponse,
@@ -36,7 +36,8 @@ from schemas import (
     SettingsBase, SettingsResponse, ContentBlockBase, ContentBlockResponse,
     ProductCreate, ProductUpdate, OrderStatusUpdate,
     InventoryBase, InventoryResponse, InventoryAdjustment, InventoryHistoryItem,
-    ReviewCreate, ReviewUpdate, ReviewResponse, SubscriberResponse, BroadcastRequest
+    ReviewCreate, ReviewUpdate, ReviewResponse, SubscriberResponse, BroadcastRequest,
+    CartEventCreate, CartEventResponse
 )
 import schemas
 from auth import get_password_hash, verify_password, create_access_token, get_current_user, get_current_user_optional, get_admin_user
@@ -544,6 +545,38 @@ async def delete_subscriber(subscriber_id: str, current_user: dict = Depends(get
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Subscriber not found")
     return {"message": "Subscriber removed successfully"}
+
+
+# --- Cart Event Routes ---
+@app.post("/api/cart-events", status_code=status.HTTP_201_CREATED)
+async def create_cart_event(event_in: CartEventCreate, current_user: Optional[dict] = Depends(get_current_user_optional)):
+    event_dict = event_in.dict()
+    event_dict["user_name"] = (current_user.get("name") or "Anonymous") if current_user else "Anonymous"
+    event_dict["user_email"] = current_user.get("email") if current_user else None
+    event_dict["created_at"] = datetime.now(timezone.utc)
+    await cart_events_collection.insert_one(event_dict)
+    return {"message": "Cart event recorded"}
+
+@app.get("/api/admin/cart-events", response_model=List[CartEventResponse])
+async def get_all_cart_events(current_user: dict = Depends(get_admin_user)):
+    events_cursor = cart_events_collection.find().sort("created_at", -1).limit(1000)
+    events = []
+    async for doc in events_cursor:
+        events.append(doc)
+    return events
+
+@app.delete("/api/admin/cart-events/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_cart_event(event_id: str, current_user: dict = Depends(get_admin_user)):
+    from bson import ObjectId
+    try:
+        obj_id = ObjectId(event_id)
+    except:
+        raise HTTPException(status_code=400, detail="Invalid cart event ID")
+
+    result = await cart_events_collection.delete_one({"_id": obj_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Cart event not found")
+    return {"message": "Cart event removed successfully"}
 
 
 async def send_broadcast_emails(subject: str, message: str):

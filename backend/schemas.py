@@ -364,6 +364,23 @@ class SubscriberResponse(SubscriberCreate):
         arbitrary_types_allowed = True
 
 
+# Cart Event Schemas
+class CartEventCreate(BaseModel):
+    product_id: str
+    product_name: str
+    quantity: int = 1
+
+class CartEventResponse(CartEventCreate):
+    id: Optional[PyObjectId] = Field(alias="_id", default=None)
+    user_name: str = "Anonymous"
+    user_email: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+
+
 class BroadcastRequest(BaseModel):
     subject: str
     message: str

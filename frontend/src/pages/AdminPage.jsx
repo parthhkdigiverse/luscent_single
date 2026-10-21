@@ -4,7 +4,7 @@ import {
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
   TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare,
   LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star,
-  Mail, Send, ChevronDown, ChevronUp
+  Mail, Send, ChevronDown, ChevronUp, ShoppingCart
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -54,6 +54,9 @@ export const AdminPage = () => {
   const [reviewsList, setReviewsList] = useState([]);
   const [inquiriesList, setInquiriesList] = useState([]);
   const [subscribersList, setSubscribersList] = useState([]);
+  const [cartEventsList, setCartEventsList] = useState([]);
+  const [cartEventsSearch, setCartEventsSearch] = useState("");
+  const [cartEventsProductFilter, setCartEventsProductFilter] = useState("All");
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [broadcastSubject, setBroadcastSubject] = useState("");
   const [broadcastMessage, setBroadcastMessage] = useState("");
@@ -323,6 +326,20 @@ export const AdminPage = () => {
     }
   };
 
+  const handleDeleteCartEvent = async (id) => {
+    if (!window.confirm("Are you sure you want to remove this cart activity entry?")) return;
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/cart-events/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setCartEventsList(cartEventsList.filter(ev => ev._id !== id));
+      } else {
+        alert("Failed to delete cart activity entry.");
+      }
+    } catch (err) {
+      alert("Error deleting cart activity entry.");
+    }
+  };
+
   const handleSendBroadcast = async (e) => {
     e.preventDefault();
     if (!broadcastSubject || !broadcastMessage) {
@@ -479,6 +496,13 @@ export const AdminPage = () => {
       if (subscribersRes.ok) {
         const subscribersData = await subscribersRes.json();
         setSubscribersList(subscribersData);
+      }
+
+      // Cart Activity
+      const cartEventsRes = await fetchAuth(`${API_URL}/api/admin/cart-events`);
+      if (cartEventsRes.ok) {
+        const cartEventsData = await cartEventsRes.json();
+        setCartEventsList(cartEventsData);
       }
       
       // Reviews
@@ -1095,6 +1119,7 @@ export const AdminPage = () => {
             <NavItem id="reviews" label="Reviews" icon={Star} />
             <NavItem id="inquiries" label="Inquiries" icon={MessageSquare} />
             <NavItem id="subscribers" label="Subscribers" icon={Mail} />
+            <NavItem id="cart-activity" label="Cart Activity" icon={ShoppingCart} />
             <NavItem id="integrations" label="Integrations" icon={Settings} />
             <NavItem id="content" label="Content" icon={FileText} />
             <NavItem id="testimonials" label="Testimonials" icon={Sparkles} />
@@ -2406,6 +2431,112 @@ export const AdminPage = () => {
                 </div>
               </div>
             )}
+
+            {/* Cart Activity Tab */}
+            {activeTab === "cart-activity" && (() => {
+              const q = cartEventsSearch.trim().toLowerCase();
+              // All store products (incl. combo), plus any product seen in events but no longer in the catalog
+              const productFilterOptions = productsList.map(p => ({ id: String(p.id), name: p.name }));
+              cartEventsList.forEach(ev => {
+                if (!productFilterOptions.some(opt => opt.id === ev.product_id)) {
+                  productFilterOptions.push({ id: ev.product_id, name: ev.product_name });
+                }
+              });
+              const filteredEvents = cartEventsList.filter(ev =>
+                (cartEventsProductFilter === "All" || ev.product_id === cartEventsProductFilter) &&
+                (!q || (ev.user_name || "").toLowerCase().includes(q) || (ev.user_email || "").toLowerCase().includes(q) || (ev.product_name || "").toLowerCase().includes(q))
+              );
+              const anonymousCount = cartEventsList.filter(ev => !ev.user_email).length;
+              return (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                  <div>
+                    <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Cart Activity</h2>
+                    <p className="text-xs sm:text-sm text-brand-grey">{cartEventsList.length} add-to-cart events • {cartEventsList.length - anonymousCount} logged-in • {anonymousCount} anonymous</p>
+                  </div>
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                  <select
+                    value={cartEventsProductFilter}
+                    onChange={(e) => setCartEventsProductFilter(e.target.value)}
+                    className="w-48 px-3.5 py-2 bg-brand-bg/50 border border-brand-card/40 rounded-xl text-xs focus:outline-none focus:border-brand-dark cursor-pointer font-medium h-[36px]"
+                  >
+                    <option value="All">All Products</option>
+                    {productFilterOptions.map(opt => (
+                      <option key={opt.id} value={opt.id}>{opt.name}</option>
+                    ))}
+                  </select>
+                  <div className="relative w-full sm:w-64">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-grey" />
+                    <input
+                      type="text"
+                      value={cartEventsSearch}
+                      onChange={(e) => setCartEventsSearch(e.target.value)}
+                      placeholder="Search name or product..."
+                      className="w-full pl-9 pr-3 py-2 text-sm rounded-full border border-brand-card/50 bg-white focus:outline-none focus:border-brand-accent"
+                    />
+                  </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl shadow-sm border border-brand-card/30 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead>
+                        <tr className="bg-brand-bg/50 border-b border-brand-card/30 text-brand-grey font-semibold uppercase tracking-wider text-[10px]">
+                          <th className="p-5 w-56">Date & Time (IST)</th>
+                          <th className="p-5">Customer Name</th>
+                          <th className="p-5">Product</th>
+                          <th className="p-5 w-20 text-center">Qty</th>
+                          <th className="p-5 w-24 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-brand-card/20">
+                        {filteredEvents.map((ev) => (
+                          <tr key={ev._id} className="hover:bg-brand-bg/30 transition">
+                            <td className="p-5 text-brand-grey whitespace-nowrap">
+                              {new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }).formatToParts(new Date(ev.created_at.endsWith("Z") ? ev.created_at : ev.created_at + "Z")).map(part => part.type === "dayPeriod" ? part.value.toUpperCase() : part.value).join("")}
+                            </td>
+                            <td className="p-5">
+                              {ev.user_email ? (
+                                <div>
+                                  <div className="font-medium text-brand-dark">{ev.user_name}</div>
+                                  <div className="text-xs text-brand-grey">{ev.user_email}</div>
+                                </div>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500">Anonymous</span>
+                              )}
+                            </td>
+                            <td className="p-5 font-medium text-brand-dark">
+                              {ev.product_name}
+                            </td>
+                            <td className="p-5 text-center text-brand-dark">
+                              {ev.quantity}
+                            </td>
+                            <td className="p-5 text-right">
+                              <button
+                                onClick={() => handleDeleteCartEvent(ev._id)}
+                                className="w-8 h-8 rounded-full inline-flex items-center justify-center text-red-400 hover:text-red-500 hover:bg-red-50 transition"
+                                title="Remove Entry"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredEvents.length === 0 && (
+                          <tr>
+                            <td colSpan="5" className="p-10 text-center text-brand-grey">
+                              No cart activity found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              );
+            })()}
 
             {/* Subscribers Tab */}
             {activeTab === "subscribers" && (
