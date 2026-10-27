@@ -133,6 +133,7 @@ class OrderCreate(BaseModel):
     paymentStatus: Optional[str] = "unpaid"
     paymentId: Optional[str] = None
     order_number: Optional[str] = None
+    source: Optional[str] = "online"  # "online" (website checkout) or "offline" (manual admin order)
 
 class OrderResponse(OrderCreate):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
@@ -145,6 +146,11 @@ class OrderResponse(OrderCreate):
     is_deleted: bool = False
     tracking_number: Optional[str] = None
     carrier: Optional[str] = None
+    delhivery_status: Optional[str] = None
+    delhivery_status_type: Optional[str] = None
+    delhivery_status_at: Optional[str] = None
+    pickup_scheduled: bool = False
+    pickup_id: Optional[str] = None
 
 
     class Config:

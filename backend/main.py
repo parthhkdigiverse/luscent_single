@@ -441,6 +441,7 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
     order_dict["order_number"] = order_number
     order_dict["user_id"] = current_user["email"] if current_user else None
     order_dict["status"] = "pending"
+    order_dict["source"] = "offline" if order_dict.get("source") == "offline" else "online"
     if not order_dict.get("paymentStatus"):
         order_dict["paymentStatus"] = "unpaid" if order_dict.get("paymentMethod") == "cod" else "paid"
     order_dict["created_at"] = datetime.now(timezone.utc)
@@ -960,7 +961,7 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                 
             await orders_collection.update_one(
                 {"_id": ObjectId(order_id)},
-                {"$set": {"tracking_number": awb, "carrier": "Delhivery"}}
+                {"$set": {"tracking_number": awb, "carrier": "Delhivery", "delhivery_status": "Manifested"}}
             )
             
     # Finally, update the status in DB now that shipping hasn't thrown an error
@@ -1416,6 +1417,12 @@ async def track_order_public(identifier: str):
     }
 
 # --- Delhivery Fulfillment APIs ---
+async def mark_pickup_scheduled(order_id: str, pickup_id: Optional[str]):
+    await orders_collection.update_one(
+        {"_id": ObjectId(order_id)},
+        {"$set": {"pickup_scheduled": True, "pickup_id": pickup_id, "pickup_scheduled_at": datetime.now(timezone.utc)}}
+    )
+
 @app.post("/api/admin/orders/{order_id}/pickup")
 async def schedule_delhivery_pickup(order_id: str):
     order = await orders_collection.find_one({"_id": ObjectId(order_id)})
@@ -1427,28 +1434,64 @@ async def schedule_delhivery_pickup(order_id: str):
     
     if not delhivery_token or delhivery_token == "mock_token":
         # Simulate success
+        await mark_pickup_scheduled(order_id, "MOCK_PICKUP_123")
         return {"message": "Pickup scheduled successfully (mock)", "pickup_id": "MOCK_PICKUP_123"}
         
-    # Example logic for real Delhivery API (adjust URL/payload based on exact Delhivery docs)
     delhivery_env = db_settings.get("delhivery_env", "sandbox")
-    url = "https://track.delhivery.com/fm/request/pb/create/" if delhivery_env == "production" else "https://staging-express.delhivery.com/fm/request/pb/create/"
-    
+    base = "https://track.delhivery.com" if delhivery_env == "production" else "https://staging-express.delhivery.com"
+    url = f"{base}/fm/request/new/"
+
+    # Pickup slot in IST: today 14:00 if requested before 13:00, otherwise the next day 11:00 (Delhivery doesn't pick up on Sundays)
+    from datetime import timedelta
+    now_ist = datetime.now(timezone(timedelta(hours=5, minutes=30)))
+    if now_ist.hour < 13:
+        pickup_day, pickup_time = now_ist, "14:00:00"
+    else:
+        pickup_day, pickup_time = now_ist + timedelta(days=1), "11:00:00"
+    if pickup_day.weekday() == 6:
+        pickup_day += timedelta(days=1)
+        pickup_time = "11:00:00"
+
     payload = {
-        "pickup_time": "14:00:00",
-        "pickup_date": datetime.utcnow().strftime("%Y-%m-%d"),
+        "pickup_time": pickup_time,
+        "pickup_date": pickup_day.strftime("%Y-%m-%d"),
         "pickup_location": db_settings.get("delhivery_warehouse", "Luscentglow Warehouse"),
         "expected_package_count": 1
     }
-    
+
     try:
-        async with httpx.AsyncClient() as client:
-            res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}"}, json=payload)
-            if res.status_code == 200:
-                return {"message": "Pickup scheduled successfully", "response": res.json()}
-            else:
-                raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
+        async with httpx.AsyncClient(timeout=20) as client:
+            res = await client.post(
+                url,
+                headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json", "Accept": "application/json"},
+                json=payload,
+            )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to schedule pickup: {str(e)}")
+        raise HTTPException(status_code=502, detail=f"Failed to connect to Delhivery: {str(e)}")
+
+    try:
+        res_json = res.json()
+    except Exception:
+        res_json = None
+
+    if res.status_code in (200, 201) and isinstance(res_json, dict) and not res_json.get("error"):
+        pickup_id = res_json.get("pickup_id") or res_json.get("pickupId")
+        await mark_pickup_scheduled(order_id, str(pickup_id) if pickup_id else None)
+        return {"message": "Pickup scheduled successfully", "response": res_json}
+
+    # A pickup for this warehouse and date already exists — this package is covered by it
+    if "already" in res.text.lower() or (isinstance(res_json, dict) and res_json.get("pr_exist")):
+        await mark_pickup_scheduled(order_id, None)
+        return {"message": "Pickup already scheduled for this date", "response": res_json}
+
+    if isinstance(res_json, dict):
+        err = res_json.get("error") or res_json.get("message") or res_json
+        # Delhivery nests reasons under keys like {"prepaid": "Client wallet balance is ..."}
+        detail = (err.get("message") or "; ".join(str(v) for v in err.values())) if isinstance(err, dict) else str(err)
+    else:
+        detail = f"Delhivery returned HTTP {res.status_code}. Check the API token, environment (sandbox/production) and warehouse name in Settings."
+    print(f"Delhivery pickup error ({res.status_code}): {res.text[:500]}")
+    raise HTTPException(status_code=400, detail=f"Delhivery pickup failed: {detail}")
 
 @app.get("/api/admin/orders/{order_id}/label")
 async def get_delhivery_label(order_id: str):
@@ -1554,7 +1597,7 @@ async def cancel_delhivery_shipment(order_id: str):
     awb = order.get("tracking_number")
     
     if not delhivery_token or delhivery_token == "mock_token":
-        await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": ""}, "$set": {"status": "pending"}})
+        await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": "", "delhivery_status": "", "pickup_scheduled": "", "pickup_id": ""}, "$set": {"status": "pending"}})
         return {"message": "Shipment cancelled (mock)"}
         
     delhivery_env = db_settings.get("delhivery_env", "sandbox")
@@ -1569,12 +1612,76 @@ async def cancel_delhivery_shipment(order_id: str):
         async with httpx.AsyncClient() as client:
             res = await client.post(url, headers={"Authorization": f"Token {delhivery_token}", "Content-Type": "application/json"}, json=payload)
             if res.status_code == 200:
-                await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": ""}, "$set": {"status": "pending"}})
+                await orders_collection.update_one({"_id": ObjectId(order_id)}, {"$unset": {"tracking_number": "", "carrier": "", "delhivery_status": "", "pickup_scheduled": "", "pickup_id": ""}, "$set": {"status": "pending"}})
                 return {"message": "Shipment cancelled successfully"}
             else:
                 raise HTTPException(status_code=400, detail=f"Delhivery API Error: {res.text}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to cancel shipment: {str(e)}")
+
+async def apply_delhivery_status(awb: str, status_str: str, status_type: str = "", status_at: Optional[str] = None):
+    """Store the latest Delhivery scan status on the order; mark it delivered once Delhivery says so."""
+    update = {
+        "delhivery_status": status_str,
+        "delhivery_status_type": status_type or None,
+        "delhivery_status_at": str(status_at) if status_at else None,
+    }
+    if status_type.upper() == "DL" and status_str.lower() == "delivered":
+        update["status"] = "delivered"
+    await orders_collection.update_one({"tracking_number": awb}, {"$set": update})
+
+@app.post("/api/admin/orders/delhivery-status/sync")
+async def sync_delhivery_statuses(current_user: dict = Depends(get_admin_user)):
+    db_settings = await settings_collection.find_one({})
+    delhivery_token = db_settings.get("delhivery_api_token") if db_settings else None
+    if not delhivery_token or delhivery_token == "mock_token":
+        return {"updated": 0, "statuses": {}}
+
+    delhivery_env = db_settings.get("delhivery_env", "sandbox")
+    base = "https://track.delhivery.com" if delhivery_env == "production" else "https://staging-express.delhivery.com"
+
+    awbs = [
+        o["tracking_number"]
+        async for o in orders_collection.find(
+            {"tracking_number": {"$nin": [None, ""]}, "is_deleted": {"$ne": True}, "status": {"$nin": ["delivered", "cancelled"]}},
+            {"tracking_number": 1},
+        )
+    ]
+
+    statuses = {}
+    async with httpx.AsyncClient(timeout=20) as client:
+        # Delhivery tracking API accepts up to 50 comma-separated waybills per call
+        for i in range(0, len(awbs), 50):
+            batch = awbs[i:i + 50]
+            try:
+                res = await client.get(
+                    f"{base}/api/v1/packages/json/",
+                    params={"waybill": ",".join(batch)},
+                    headers={"Authorization": f"Token {delhivery_token}"},
+                )
+                if res.status_code != 200:
+                    print(f"Delhivery tracking API error ({res.status_code}): {res.text}")
+                    continue
+                data = res.json()
+            except Exception as e:
+                print(f"Failed to fetch Delhivery tracking: {str(e)}")
+                continue
+
+            for entry in data.get("ShipmentData", []) or []:
+                shipment = entry.get("Shipment", {}) if isinstance(entry, dict) else {}
+                awb = shipment.get("AWB")
+                status_obj = shipment.get("Status") or {}
+                status_str = status_obj.get("Status") if isinstance(status_obj, dict) else None
+                if not awb or not status_str:
+                    continue
+                await apply_delhivery_status(awb, status_str, status_obj.get("StatusType", ""), status_obj.get("StatusDateTime"))
+                statuses[awb] = {
+                    "delhivery_status": status_str,
+                    "delhivery_status_type": status_obj.get("StatusType"),
+                    "delhivery_status_at": status_obj.get("StatusDateTime"),
+                }
+
+    return {"updated": len(statuses), "statuses": statuses}
 
 @app.post("/api/webhooks/delhivery")
 async def delhivery_webhook(request: Request):
@@ -1625,7 +1732,11 @@ async def delhivery_webhook(request: Request):
             status_str = shipment_data.get("Status", "")
         if not status_type:
             status_type = shipment_data.get("StatusType", "")
-            
+
+        if status_str:
+            status_at = status_obj.get("StatusDateTime") if isinstance(status_obj, dict) else None
+            await apply_delhivery_status(awb, status_str, status_type, status_at)
+
         # Check if the status indicates cancellation (CX is the standard Delhivery status code for cancellation)
         is_cancelled = (
             status_type.upper() == "CX" or

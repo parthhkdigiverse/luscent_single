@@ -3,8 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   BarChart3, ShoppingBag, Users, Plus, Edit2, Trash2, CheckCircle, Clock, 
   TrendingUp, IndianRupee, ShieldAlert, ArrowRight, X, ChevronRight, Lock, User, Upload, Eye, EyeOff, RotateCcw, MessageSquare,
-  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Filter, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star,
-  Mail, Send, ChevronDown, ChevronUp, ShoppingCart
+  LogOut, Package, Ticket, LayoutDashboard, FileText, Settings, Download, Circle, Search, Printer, Truck, Boxes, CreditCard, Wallet, XCircle, Sparkles, ArrowUpRight, ArrowDownRight, Star,
+  Mail, Send, ChevronDown, ChevronUp, ShoppingCart, CalendarDays, ChevronLeft
 } from "lucide-react";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
@@ -47,6 +47,9 @@ export const AdminPage = () => {
     setOrderTab(val);
   };
   const [searchOrderQuery, setSearchOrderQuery] = useState("");
+  const [orderSource, setOrderSource] = useState("All");
+  const [busyOrderIds, setBusyOrderIds] = useState([]); // ship/pickup requests in flight, to block double clicks
+  const [orderDateRange, setOrderDateRange] = useState({ from: null, to: null });
   const [selectedOrders, setSelectedOrders] = useState([]);
   const [productsList, setProductsList] = useState([]);
   const [productCategoryFilter, setProductCategoryFilter] = useState("All");
@@ -197,6 +200,38 @@ export const AdminPage = () => {
     }
   }, [isAuthenticated]);
 
+  // Pull live shipment status from Delhivery whenever the Orders tab is opened
+  const [syncingDelhivery, setSyncingDelhivery] = useState(false);
+  const syncDelhiveryStatuses = async () => {
+    setSyncingDelhivery(true);
+    try {
+      const res = await fetchAuth(`${API_URL}/api/admin/orders/delhivery-status/sync`, { method: "POST" });
+      if (res.ok) {
+        const { statuses } = await res.json();
+        if (statuses && Object.keys(statuses).length > 0) {
+          setOrders(prev => prev.map(o => {
+            const s = o.tracking_number && statuses[o.tracking_number];
+            if (!s) return o;
+            const delivered = (s.delhivery_status_type || "").toUpperCase() === "DL" && (s.delhivery_status || "").toLowerCase() === "delivered";
+            return { ...o, ...s, ...(delivered ? { status: "delivered" } : {}) };
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Delhivery status sync error:", err);
+    } finally {
+      setSyncingDelhivery(false);
+    }
+  };
+
+  // Sync on opening the Orders tab, then keep it fresh every minute while the tab is open
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== "orders") return;
+    syncDelhiveryStatuses();
+    const interval = setInterval(syncDelhiveryStatuses, 60000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, activeTab]);
+
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setLoginError("");
@@ -267,7 +302,8 @@ export const AdminPage = () => {
       pincode: manualOrderPincode,
       paymentMethod: manualOrderPaymentMethod,
       totalPrice: totalPrice,
-      items: items
+      items: items,
+      source: "offline"
     };
 
     try {
@@ -286,7 +322,6 @@ export const AdminPage = () => {
         setManualOrderState("");
         setManualOrderPincode("");
         setManualOrderItems({});
-        alert("Order created successfully!");
       } else {
         const data = await res.json();
         alert(data.detail || "Error creating order");
@@ -417,13 +452,19 @@ export const AdminPage = () => {
       // Merge order users with auth users for search compatibility
       const enhancedOrders = mergedOrders.map(o => {
         const orderUser = apiUsers.find(u => u.email === o.email || (o.user_id && u._id === o.user_id));
-        return { ...o, user_data: orderUser };
+        // Backend sends UTC timestamps without a timezone suffix; mark them as UTC so IST conversion is correct
+        const created_at = typeof o.created_at === "string" && !/(Z|[+-]\d{2}:?\d{2})$/.test(o.created_at)
+          ? `${o.created_at}Z`
+          : o.created_at;
+        return { ...o, created_at, user_data: orderUser };
       }).sort((a, b) => {
         const tA = a.created_at ? new Date(a.created_at).getTime() : 0;
         const tB = b.created_at ? new Date(b.created_at).getTime() : 0;
         return tB - tA;
       });
       setOrders(enhancedOrders);
+      // Order list was just replaced; pull the latest Delhivery scans on top of it
+      if (enhancedOrders.some(o => o.tracking_number)) syncDelhiveryStatuses();
 
       // Compute dynamic revenue and order metrics
       const totalRevenue = mergedOrders.reduce((sum, ord) => sum + (Number(ord.totalPrice) || 0), 0);
@@ -1244,6 +1285,19 @@ export const AdminPage = () => {
                   if (!matchesSearch) return false;
                 }
 
+                if (orderSource !== "All") {
+                  if ((o.source || "online").toLowerCase() !== orderSource.toLowerCase()) return false;
+                }
+
+                if (orderDateRange.from) {
+                  const created = new Date(o.created_at);
+                  const start = new Date(orderDateRange.from);
+                  start.setHours(0, 0, 0, 0);
+                  const end = new Date(orderDateRange.to || orderDateRange.from);
+                  end.setHours(23, 59, 59, 999);
+                  if (created < start || created > end) return false;
+                }
+
                 if (orderTab !== "All") {
                   if (orderTab === "Today") {
                     const today = new Date().toLocaleDateString();
@@ -1267,12 +1321,17 @@ export const AdminPage = () => {
               
               const getStatusColor = (status) => {
                 switch(status?.toLowerCase()) {
-                  case 'confirmed': return "bg-blue-100 text-blue-700";
+                  case 'pending': return "bg-amber-100 text-amber-700";
+                  case 'manifested':
+                  case 'pickup pending': return "bg-orange-100 text-orange-700";
+                  case 'shipped':
+                  case 'in transit': return "bg-blue-100 text-blue-700";
                   case 'out for delivery': return "bg-sky-100 text-sky-700";
                   case 'delivered': return "bg-brand-green/20 text-brand-green";
-                  case 'cancelled': return "bg-red-100 text-red-700";
-                  case 'in transit': return "bg-blue-100 text-blue-700";
-                  case 'packing': return "bg-orange-100 text-orange-700";
+                  case 'cancelled':
+                  case 'lost': return "bg-red-100 text-red-700";
+                  case 'rto':
+                  case 'returned': return "bg-purple-100 text-purple-700";
                   default: return "bg-brand-card text-brand-dark";
                 }
               };
@@ -1335,7 +1394,8 @@ export const AdminPage = () => {
               };
 
               const handleShipOrder = async (orderId) => {
-                if (!window.confirm("Ship this order with Delhivery?")) return;
+                if (busyOrderIds.includes(orderId)) return;
+                setBusyOrderIds(prev => [...prev, orderId]);
                 try {
                   const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/status`, {
                     method: "PUT",
@@ -1343,7 +1403,6 @@ export const AdminPage = () => {
                     body: JSON.stringify({ status: "shipped" })
                   });
                   if (res.ok) {
-                    alert("Order shipped successfully!");
                     fetchDashboardData();
                   } else {
                     const err = await res.json();
@@ -1351,15 +1410,18 @@ export const AdminPage = () => {
                   }
                 } catch (err) {
                   alert("Network error while shipping order.");
+                } finally {
+                  setBusyOrderIds(prev => prev.filter(id => id !== orderId));
                 }
               };
 
               const handleSchedulePickup = async (orderId) => {
-                if (!window.confirm("Schedule pickup with Delhivery?")) return;
+                if (busyOrderIds.includes(orderId)) return;
+                setBusyOrderIds(prev => [...prev, orderId]);
                 try {
                   const res = await fetchAuth(`${API_URL}/api/admin/orders/${orderId}/pickup`, { method: "POST" });
                   if (res.ok) {
-                    alert("Pickup scheduled successfully!");
+                    setOrders(prev => prev.map(o => (o.id || o._id) === orderId ? { ...o, pickup_scheduled: true } : o));
                     fetchDashboardData();
                   } else {
                     const err = await res.json();
@@ -1367,6 +1429,8 @@ export const AdminPage = () => {
                   }
                 } catch (err) {
                   alert("Network error while scheduling pickup.");
+                } finally {
+                  setBusyOrderIds(prev => prev.filter(id => id !== orderId));
                 }
               };
 
@@ -1438,15 +1502,24 @@ export const AdminPage = () => {
                       <h2 className="text-2xl sm:text-3xl font-serif font-medium text-brand-dark mb-1">Orders</h2>
                       <p className="text-xs sm:text-sm text-brand-grey">{filteredOrders.length} orders • Manage the full order lifecycle</p>
                     </div>
-                    <div className="flex flex-wrap gap-2 sm:gap-3">
-                      <Button 
-                        variant="outline" 
-                        onClick={() => document.getElementById("order-search-input")?.focus()}
-                        className="flex items-center gap-2 py-2 px-3 sm:px-4 rounded-full text-xs sm:text-sm font-medium border-brand-card/60 bg-white hover:bg-brand-bg transition-colors"
-                      >
-                        <Filter size={14} /> Filters
-                      </Button>
-                      <Button 
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                      <div className="flex gap-1 bg-[#F3F0EC] border border-brand-card/50 p-1 rounded-full">
+                        {["All", "Online", "Offline"].map(src => (
+                          <button
+                            key={src}
+                            onClick={() => setOrderSource(src)}
+                            className={`px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
+                              orderSource === src
+                                ? "bg-[#3f312b] text-white shadow-sm"
+                                : "text-brand-grey hover:text-brand-dark"
+                            }`}
+                          >
+                            {src}
+                          </button>
+                        ))}
+                      </div>
+                      <DateRangeFilter value={orderDateRange} onChange={setOrderDateRange} />
+                      <Button
                         variant="outline" 
                         onClick={handleExportCSV}
                         className="flex items-center gap-2 py-2 px-3 sm:px-4 rounded-full text-xs sm:text-sm font-medium border-brand-card/60 bg-white hover:bg-brand-bg transition-colors"
@@ -1519,7 +1592,7 @@ export const AdminPage = () => {
 
                     {/* Table */}
                     <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse whitespace-nowrap min-w-[1000px]">
+                      <table className="w-full text-left border-collapse whitespace-nowrap min-w-[960px]">
                         <thead>
                           <tr className="border-b border-brand-card/30 text-[9px] sm:text-[10px] uppercase tracking-wider text-brand-grey font-bold bg-[#FAF8F5]/50">
                             <th className="py-4 px-6 w-10">
@@ -1529,31 +1602,57 @@ export const AdminPage = () => {
                                 <Circle size={16} className="text-[#A0A0A0] cursor-pointer hover:text-brand-dark transition-colors" onClick={() => setSelectedOrders(filteredOrders.map(o => o.id || o._id))} />
                               )}
                             </th>
-                            <th className="py-4 px-4">ORDER</th>
-                            <th className="py-4 px-4">CUSTOMER</th>
-                            <th className="py-4 px-4">PRODUCT</th>
-                            <th className="py-4 px-4">QTY</th>
-                            <th className="py-4 px-4">PAYMENT</th>
-                            <th className="py-4 px-4">STATUS</th>
-                            <th className="py-4 px-4">AMOUNT</th>
-                            <th className="py-4 px-6">DATE</th>
-                            <th className="py-4 px-4">FULFILLMENT</th>
+                            <th className="py-4 px-3">ORDER</th>
+                            <th className="py-4 px-3">CUSTOMER</th>
+                            <th className="py-4 px-3">PRODUCT</th>
+                            <th className="py-4 px-3">QTY</th>
+                            <th className="py-4 px-3">PAYMENT</th>
+                            <th className="py-4 px-3">STATUS</th>
+                            <th className="py-4 px-3">AMOUNT</th>
+                            <th className="py-4 px-3">DATE</th>
+                            <th className="py-4 pl-3 pr-6 text-right">FULFILLMENT</th>
                           </tr>
                         </thead>
-                        <tbody className="text-xs sm:text-sm">
+                        <tbody className="text-xs sm:text-sm [&_td]:align-middle">
                           {filteredOrders.length === 0 ? (
                             <tr>
                               <td colSpan="10" className="py-12 text-center text-brand-grey">No orders found.</td>
                             </tr>
                           ) : (
                             filteredOrders.map((o, idx) => {
-                              // Derive some statuses if not strictly mapped to the design, just to make it look good like the image
-                              let displayStatus = o.status;
-                              if(displayStatus === 'pending') displayStatus = 'Confirmed';
-                              else if(displayStatus === 'shipped') displayStatus = 'Out For Delivery';
-                              else if(displayStatus === 'cancelled') displayStatus = 'Cancelled';
-                              else if(displayStatus === 'delivered') displayStatus = 'Delivered';
-                              else displayStatus = 'Confirmed'; // Fallback
+                              const isDelivered = (o.delhivery_status || "").toLowerCase() === "delivered" || (o.status || "").toLowerCase() === "delivered";
+                              const handleDeleteOrder = async () => {
+                                if (!window.confirm(`Are you sure you want to delete order ${o.order_number}?`)) return;
+                                try {
+                                  const res = await fetchAuth(`${API_URL}/api/admin/orders/${o.id || o._id}/soft-delete`, { method: 'PUT' });
+                                  if (res.ok) {
+                                    fetchDashboardData();
+                                  } else {
+                                    alert('Failed to delete order');
+                                  }
+                                } catch(err) {
+                                  alert('Error deleting order');
+                                }
+                              };
+
+                              // Order status: once shipped, follow the live Delhivery scan; otherwise the order's own status
+                              const orderStatus = (o.status || "pending").toLowerCase();
+                              const dlvStatus = (o.delhivery_status || "").toLowerCase();
+                              const dlvType = (o.delhivery_status_type || "").toUpperCase();
+                              let displayStatus;
+                              if (orderStatus === 'cancelled') displayStatus = 'Cancelled';
+                              else if (isDelivered) displayStatus = 'Delivered';
+                              else if (o.tracking_number && dlvStatus) {
+                                if (dlvType === 'RT' || dlvStatus.startsWith('rto') || dlvStatus === 'returned') displayStatus = 'RTO';
+                                else if (dlvStatus === 'dispatched') displayStatus = 'Out For Delivery';
+                                else if (dlvStatus === 'in transit' || dlvStatus === 'pending') displayStatus = 'In Transit';
+                                else if (dlvStatus === 'not picked') displayStatus = 'Pickup Pending';
+                                else if (dlvStatus === 'manifested') displayStatus = 'Manifested';
+                                else if (dlvStatus === 'lost') displayStatus = 'Lost';
+                                else displayStatus = o.delhivery_status;
+                              }
+                              else if (o.tracking_number || orderStatus === 'shipped') displayStatus = 'Shipped';
+                              else displayStatus = 'Pending';
 
                               let paymentMethodDisplay = "Razorpay";
                               if (o.paymentMethod === 'cod') paymentMethodDisplay = 'COD';
@@ -1579,117 +1678,138 @@ export const AdminPage = () => {
 
                               return (
                                 <tr key={(o.id || o._id)} className={`border-b border-brand-card/20 hover:bg-brand-bg/40 transition-colors ${isSelected ? 'bg-[#FAF8F5]' : 'bg-white'}`}>
-                                  <td className="py-4 px-6">
+                                  <td className="py-4 px-3">
                                     {isSelected ? (
                                       <CheckCircle size={16} fill="#333" color="white" className="cursor-pointer" onClick={toggleSelection} />
                                     ) : (
                                       <Circle size={16} className="text-[#A0A0A0] cursor-pointer hover:text-brand-dark transition-colors" onClick={toggleSelection} />
                                     )}
                                   </td>
-                                  <td className="py-4 px-4 font-semibold text-brand-dark">
+                                  <td className="py-4 px-3 font-semibold text-brand-dark">
                                     {o.order_number}
                                   </td>
-                                  <td className="py-4 px-4">
+                                  <td className="py-4 px-3">
                                     <div className="font-semibold text-brand-dark">{o.name}</div>
                                     <div className="text-[10px] sm:text-xs text-brand-grey mt-0.5">{o.phone} • {o.city}</div>
                                   </td>
-                                  <td className="py-4 px-4 text-brand-grey">
+                                  <td className="py-4 px-3 text-brand-grey whitespace-normal min-w-[120px] max-w-[170px]">
                                     {o.items && o.items.length > 0 ? o.items[0].name : "Unknown Product"}
                                     {o.items && o.items.length > 1 && ` +${o.items.length - 1} more`}
                                   </td>
-                                  <td className="py-4 px-4 text-brand-dark font-medium text-center sm:text-left">
+                                  <td className="py-4 px-3 text-brand-dark font-medium text-center sm:text-left">
                                     {o.items ? o.items.reduce((acc, item) => acc + item.quantity, 0) : 1}
                                   </td>
-                                  <td className="py-4 px-4 align-top">
+                                  <td className="py-4 px-3">
                                     <div className="text-brand-dark mb-1.5 text-[13px] font-medium">{paymentMethodDisplay}</div>
                                     <span className={`inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-medium border ${getPaymentColor(paymentStatusDisplay)}`}>
                                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80"></span>
                                       {paymentStatusDisplay}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-4">
+                                  <td className="py-4 px-3">
                                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ${getStatusColor(displayStatus)}`}>
                                       <span className="w-1.5 h-1.5 rounded-full bg-current opacity-75"></span>
                                       {displayStatus}
                                     </span>
                                   </td>
-                                  <td className="py-4 px-4 font-bold text-brand-dark">
+                                  <td className="py-4 px-3 font-bold text-brand-dark">
                                     ₹{(Number(o.totalPrice) || 0).toLocaleString("en-IN")}
                                   </td>
-                                  <td className="py-4 px-6 text-brand-grey">
-                                    {o.created_at ? new Date(o.created_at).toLocaleDateString("en-GB", { day: 'numeric', month: 'short' }) : "Today"}
+                                  <td className="py-4 px-3 text-brand-grey">
+                                    {o.created_at ? (
+                                      <>
+                                        <div className="text-brand-dark font-medium">
+                                          {new Date(o.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })}
+                                        </div>
+                                        <div className="text-[10px] mt-0.5">
+                                          {new Date(o.created_at).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).toUpperCase()}
+                                        </div>
+                                      </>
+                                    ) : "—"}
                                   </td>
-                                  <td className="py-4 px-4">
-                                    <div className="flex items-center gap-3">
-                                    {o.tracking_number ? (
-                                      <div className="flex flex-col gap-2 relative">
-                                        <div className="flex items-center gap-3">
-                                          <span 
-                                            onClick={() => handleGetLabel(o.id || o._id)}
-                                            className="px-2.5 py-0.5 rounded-md border border-[#cbd8d2] text-[10px] font-bold text-[#4d7d6f] bg-[#e6edeb] cursor-pointer hover:bg-[#d8e2df] transition-colors"
-                                          >
-                                            DELHIVERY
-                                          </span>
-                                          <span 
-                                            onClick={() => handleGetLabel(o.id || o._id)}
-                                            className="text-[10px] font-bold text-[#184976] cursor-pointer hover:underline"
-                                          >
-                                            {o.tracking_number}
-                                          </span>
+                                  <td className="py-4 pl-3 pr-6 text-right min-w-[250px]">
+                                    {(() => {
+                                      const deleteBtn = (
+                                        <button
+                                          onClick={handleDeleteOrder}
+                                          title="Delete Order"
+                                          className="w-7 h-7 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 hover:text-red-600 transition-colors inline-flex items-center justify-center flex-shrink-0"
+                                        >
+                                          <Trash2 size={14} />
+                                        </button>
+                                      );
+
+                                      if (!o.tracking_number) {
+                                        return (
+                                          <div className="flex items-center justify-end gap-2">
+                                            <button 
+                                              onClick={() => handleShipOrder(o.id || o._id)}
+                                              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#3d312c] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#2c221e] transition-colors shadow-sm"
+                                            >
+                                              <Truck size={12} /> {busyOrderIds.includes(o.id || o._id) ? "SHIPPING..." : "SHIP ORDER"}
+                                            </button>
+                                            {deleteBtn}
+                                          </div>
+                                        );
+                                      }
+
+                                      return (
+                                        <div className="flex flex-col items-end gap-1.5">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="px-2 py-0.5 rounded-md border border-[#e2ddd6] bg-[#f6f4f1] text-[9px] font-bold tracking-wider text-[#8a8a8a]">
+                                              DELHIVERY
+                                            </span>
+                                            <span
+                                              onClick={() => handleGetLabel(o.id || o._id)}
+                                              className="px-2 py-0.5 rounded-md bg-[#eef3f8] text-[10px] font-bold text-[#184976] cursor-pointer hover:bg-[#e2eaf3] transition-colors"
+                                            >
+                                              {o.tracking_number}
+                                            </span>
+                                          </div>
+                                          <div className="text-[10px] text-[#6b6b6b] font-medium">
+                                            Status:{" "}
+                                            <span
+                                              className="text-brand-dark font-semibold"
+                                              title={o.delhivery_status_at ? `Updated: ${new Date(o.delhivery_status_at).toLocaleString("en-IN")}` : undefined}
+                                            >
+                                              {isDelivered ? "Delivered" : (o.delhivery_status || (syncingDelhivery ? "Fetching..." : "—"))}
+                                            </span>
+                                          </div>
+                                          <div className="flex flex-wrap items-center justify-end gap-1.5 mt-1">
+                                            {!isDelivered && (o.pickup_scheduled ? (
+                                              <span
+                                                title={o.pickup_id ? `Pickup ID: ${o.pickup_id}` : "Pickup scheduled"}
+                                                className="px-2.5 py-1 rounded-full border border-[#e2ddd6] bg-brand-card text-[#3d312c] text-[9px] font-bold tracking-wider cursor-default"
+                                              >
+                                                SCHEDULED
+                                              </span>
+                                            ) : (
+                                              <button
+                                                onClick={() => handleSchedulePickup(o.id || o._id)}
+                                                className="px-2.5 py-1 rounded-full bg-brand-accent text-white text-[9px] font-bold tracking-wider hover:bg-[#c25a20] transition-colors"
+                                              >
+                                                {busyOrderIds.includes(o.id || o._id) ? "SCHEDULING..." : "PICKUP"}
+                                              </button>
+                                            ))}
+                                            <button 
+                                              onClick={() => handleGetLabel(o.id || o._id)}
+                                              className="px-2.5 py-1 rounded-full border border-[#e2ddd6] bg-white text-brand-dark text-[9px] font-bold tracking-wider flex items-center gap-1.5 hover:bg-brand-bg transition-colors"
+                                            >
+                                              <Printer size={10} /> LABEL
+                                            </button>
+                                            {!isDelivered && (
+                                              <button 
+                                                onClick={() => handleCancelShipment(o.id || o._id)}
+                                                className="px-2.5 py-1 rounded-full bg-[#fdf6ec] text-[#b8602c] text-[9px] font-bold tracking-wider hover:bg-[#ffeac4] transition-colors"
+                                              >
+                                                CANCEL
+                                              </button>
+                                            )}
+                                            {deleteBtn}
+                                          </div>
                                         </div>
-                                        <div className="text-[10px] text-[#6b6b6b] font-medium">
-                                          Status: <span className="text-[#184976] font-bold">Manifested</span>
-                                        </div>
-                                        <div className="flex items-center gap-2 mt-1">
-                                          <button 
-                                            onClick={() => handleSchedulePickup(o.id || o._id)}
-                                            className="px-3 py-1 rounded-full bg-[#7a8a72] text-white text-[9px] font-bold tracking-wider hover:bg-[#687661] transition-colors"
-                                          >
-                                            PICKUP
-                                          </button>
-                                          <button 
-                                            onClick={() => handleGetLabel(o.id || o._id)}
-                                            className="px-3 py-1 rounded-full border border-[#e8dccb] bg-white text-[#b8602c] text-[9px] font-bold tracking-wider flex items-center gap-1.5 hover:bg-brand-bg transition-colors"
-                                          >
-                                            <Printer size={10} className="text-[#7a8a72]" /> LABEL
-                                          </button>
-                                          <button 
-                                            onClick={() => handleCancelShipment(o.id || o._id)}
-                                            className="px-3 py-1 rounded-full bg-[#fdf6ec] text-[#b8602c] text-[9px] font-bold tracking-wider hover:bg-[#ffeac4] transition-colors"
-                                          >
-                                            CANCEL
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                      <button 
-                                        onClick={() => handleShipOrder(o.id || o._id)}
-                                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#3d312c] text-white text-[10px] font-bold uppercase tracking-wider hover:bg-[#2c221e] transition-colors shadow-sm"
-                                      >
-                                        <Truck size={12} /> SHIP ORDER
-                                      </button>
-                                    )}
-                                    <button 
-                                      onClick={async () => {
-                                        if(window.confirm(`Are you sure you want to delete order ${o.order_number}?`)) {
-                                          try {
-                                            const res = await fetchAuth(`${API_URL}/api/admin/orders/${o.id || o._id}/soft-delete`, { method: 'PUT' });
-                                            if (res.ok) {
-                                              fetchDashboardData();
-                                            } else {
-                                              alert('Failed to delete order');
-                                            }
-                                          } catch(err) {
-                                            alert('Error deleting order');
-                                          }
-                                        }
-                                      }}
-                                      className="p-2 text-brand-grey hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-flex items-center justify-center"
-                                      title="Delete Order"
-                                    >
-                                      <Trash2 size={16} />
-                                    </button>
-                                    </div>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               );
@@ -5791,6 +5911,184 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
                 <Button type="submit" className="px-8">Save Testimonial</Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Single date filter: click one day for a single date, click a second day to make it a range.
+const DateRangeFilter = ({ value, onChange }) => {
+  const [open, setOpen] = useState(false);
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = value.from ? new Date(value.from) : new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const [draft, setDraft] = useState(value);
+  const [hoverDay, setHoverDay] = useState(null);
+  const wrapperRef = React.useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+  const sameDay = (a, b) => a && b && startOfDay(a).getTime() === startOfDay(b).getTime();
+  const fmt = (d) => new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+
+  const label = !value.from
+    ? "All dates"
+    : (!value.to || sameDay(value.from, value.to))
+      ? fmt(value.from)
+      : `${fmt(value.from)} – ${fmt(value.to)}`;
+
+  const openPicker = () => {
+    setDraft(value);
+    setOpen(o => !o);
+  };
+
+  const apply = (range) => {
+    onChange(range);
+    setOpen(false);
+  };
+
+  const handleDayClick = (day) => {
+    if (!draft.from || draft.to) {
+      setDraft({ from: day, to: null });
+    } else if (day < startOfDay(draft.from)) {
+      setDraft({ from: day, to: draft.from });
+    } else {
+      setDraft({ from: draft.from, to: day });
+    }
+  };
+
+  const today = startOfDay(new Date());
+  const presets = [
+    { label: "Today", range: () => ({ from: today, to: today }) },
+    { label: "Yesterday", range: () => { const y = new Date(today); y.setDate(y.getDate() - 1); return { from: y, to: y }; } },
+    { label: "Last 7 days", range: () => { const s = new Date(today); s.setDate(s.getDate() - 6); return { from: s, to: today }; } },
+    { label: "Last 30 days", range: () => { const s = new Date(today); s.setDate(s.getDate() - 29); return { from: s, to: today }; } },
+    { label: "This month", range: () => ({ from: new Date(today.getFullYear(), today.getMonth(), 1), to: today }) },
+    { label: "Last month", range: () => ({ from: new Date(today.getFullYear(), today.getMonth() - 1, 1), to: new Date(today.getFullYear(), today.getMonth(), 0) }) },
+  ];
+
+  const year = viewMonth.getFullYear();
+  const month = viewMonth.getMonth();
+  const leadingBlanks = (new Date(year, month, 1).getDay() + 6) % 7; // Monday first
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [
+    ...Array(leadingBlanks).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+  ];
+
+  const rangeEnd = draft.to || (draft.from && hoverDay ? hoverDay : null);
+  const [lo, hi] = draft.from && rangeEnd
+    ? (rangeEnd < startOfDay(draft.from) ? [rangeEnd, startOfDay(draft.from)] : [startOfDay(draft.from), rangeEnd])
+    : [null, null];
+
+  return (
+    <div className="relative" ref={wrapperRef}>
+      <div className="flex items-center">
+        <button
+          onClick={openPicker}
+          className={`flex items-center gap-2 py-2 pl-4 ${value.from ? "pr-9" : "pr-4"} rounded-full text-xs sm:text-sm font-medium border bg-white transition-colors ${
+            value.from ? "border-[#3f312b] text-brand-dark" : "border-brand-card/60 text-brand-grey hover:text-brand-dark"
+          }`}
+        >
+          <CalendarDays size={14} /> {label}
+          {!value.from && <ChevronDown size={14} />}
+        </button>
+        {value.from && (
+          <button
+            onClick={() => onChange({ from: null, to: null })}
+            className="-ml-8 p-1 rounded-full text-brand-grey hover:text-brand-dark hover:bg-brand-bg"
+            title="Clear date filter"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 z-40 bg-white border border-brand-card/50 rounded-2xl shadow-xl flex flex-col sm:flex-row overflow-hidden">
+          <div className="flex sm:flex-col gap-1 p-3 border-b sm:border-b-0 sm:border-r border-brand-card/30 bg-[#FAF8F5] overflow-x-auto">
+            {presets.map(p => (
+              <button
+                key={p.label}
+                onClick={() => apply(p.range())}
+                className="text-left whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium text-brand-dark hover:bg-white transition-colors"
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="p-4 w-[280px]">
+            <div className="flex items-center justify-between mb-3">
+              <button onClick={() => setViewMonth(new Date(year, month - 1, 1))} className="p-1.5 rounded-full hover:bg-brand-bg text-brand-dark">
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-sm font-semibold text-brand-dark">
+                {viewMonth.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+              </span>
+              <button onClick={() => setViewMonth(new Date(year, month + 1, 1))} className="p-1.5 rounded-full hover:bg-brand-bg text-brand-dark">
+                <ChevronRight size={16} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 text-center text-[10px] font-bold uppercase text-brand-grey mb-1">
+              {["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map(d => <span key={d} className="py-1">{d}</span>)}
+            </div>
+            <div className="grid grid-cols-7 gap-y-1" onMouseLeave={() => setHoverDay(null)}>
+              {cells.map((day, i) => {
+                if (!day) return <span key={`b${i}`} />;
+                const isEdge = sameDay(day, draft.from) || (draft.to && sameDay(day, draft.to));
+                const inRange = lo && hi && day > lo && day < hi;
+                const isToday = sameDay(day, today);
+                return (
+                  <button
+                    key={i}
+                    onClick={() => handleDayClick(day)}
+                    onMouseEnter={() => setHoverDay(day)}
+                    className={`h-8 text-xs transition-colors ${
+                      isEdge
+                        ? "bg-[#3f312b] text-white rounded-full font-semibold"
+                        : inRange
+                          ? "bg-[#F3F0EC] text-brand-dark"
+                          : `rounded-full hover:bg-brand-bg text-brand-dark ${isToday ? "font-bold underline" : ""}`
+                    }`}
+                  >
+                    {day.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-[10px] text-brand-grey mt-3">
+              {!draft.from ? "Select a date, or two dates for a range." : !draft.to ? `${fmt(draft.from)} — pick an end date or apply for a single day.` : `${fmt(draft.from)} – ${fmt(draft.to)}`}
+            </p>
+
+            <div className="flex justify-end gap-2 mt-3">
+              <button
+                onClick={() => apply({ from: null, to: null })}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold text-brand-grey hover:text-brand-dark"
+              >
+                Clear
+              </button>
+              <button
+                disabled={!draft.from}
+                onClick={() => apply({ from: draft.from, to: draft.to || draft.from })}
+                className="px-4 py-1.5 rounded-full text-xs font-semibold bg-[#3f312b] text-white hover:bg-black disabled:opacity-40 transition-colors"
+              >
+                Apply
+              </button>
+            </div>
           </div>
         </div>
       )}
