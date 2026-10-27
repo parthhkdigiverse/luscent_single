@@ -48,6 +48,7 @@ export const AdminPage = () => {
   };
   const [searchOrderQuery, setSearchOrderQuery] = useState("");
   const [orderSource, setOrderSource] = useState("All");
+  const [dashboardSource, setDashboardSource] = useState("All");
   const [busyOrderIds, setBusyOrderIds] = useState([]); // ship/pickup requests in flight, to block double clicks
   const [orderDateRange, setOrderDateRange] = useState({ from: null, to: null });
   const [selectedOrders, setSelectedOrders] = useState([]);
@@ -257,6 +258,13 @@ export const AdminPage = () => {
       setSubmittingLogin(false);
     }
   };
+
+  // Dashboard only counts live orders (no cancelled/trashed) for the selected source
+  const dashboardOrders = orders.filter(o =>
+    !o.is_deleted &&
+    (o.status || "").toLowerCase() !== "cancelled" &&
+    (dashboardSource === "All" || (o.source || "online").toLowerCase() === dashboardSource.toLowerCase())
+  );
 
   const handleAdminLogout = () => {
     sessionStorage.removeItem("luscent_admin_token");
@@ -1198,7 +1206,7 @@ export const AdminPage = () => {
             </Button>
             <div className="flex items-center gap-2 border border-brand-card/60 bg-[#FAF8F5] rounded-full px-4 py-1.5 shadow-sm h-[36px]">
               <span className="text-[10px] font-bold text-brand-grey uppercase tracking-widest">Today</span>
-              <span className="text-sm font-bold text-brand-dark">₹{orders.filter(o => o.status !== "cancelled" && new Date(o.created_at).toDateString() === new Date().toDateString()).reduce((sum, o) => sum + (Number(o.totalPrice) || 0), 0).toLocaleString("en-IN")}</span>
+              <span className="text-sm font-bold text-brand-dark">₹{orders.filter(o => o.status !== "cancelled" && !o.is_deleted && new Date(o.created_at).toDateString() === new Date().toDateString()).reduce((sum, o) => sum + (Number(o.totalPrice) || 0), 0).toLocaleString("en-IN")}</span>
             </div>
             <Button variant="primary" onClick={() => setShowManualOrderModal(true)} className="text-xs py-2 px-5 bg-brand-dark text-white hover:bg-black rounded-full flex items-center gap-1.5 shadow-sm h-[36px]">
               <Plus size={14} strokeWidth={3} /> <span className="font-semibold tracking-wide">Quick Order</span>
@@ -1220,7 +1228,9 @@ export const AdminPage = () => {
           {/* Dashboard Overview */}
           {activeTab === "overview" && (
             <DashboardOverview 
-              orders={orders} 
+              orders={dashboardOrders} 
+              source={dashboardSource}
+              setSource={setDashboardSource}
               productsList={productsList} 
               inventoryList={inventoryList} 
               setShowManualOrderModal={setShowManualOrderModal} 
@@ -1232,7 +1242,7 @@ export const AdminPage = () => {
             {activeTab === "overview" && (
               <div className="space-y-6">
                 <h3 className="font-serif text-lg font-semibold text-brand-dark">Latest Orders</h3>
-                {orders.length === 0 ? (
+                {dashboardOrders.length === 0 ? (
                   <div className="py-12 text-center text-xs text-brand-grey">No orders placed yet.</div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -1248,7 +1258,7 @@ export const AdminPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {orders.slice(0, 5).map(o => (
+                        {dashboardOrders.slice(0, 5).map(o => (
                           <tr key={(o.id || o._id)} className="border-b border-brand-bg hover:bg-brand-bg/30">
                             <td className="py-3.5 px-4 font-bold">{o.order_number}</td>
                             <td className="py-3.5 px-4 text-brand-grey">{new Date(o.created_at).toLocaleDateString()}</td>
@@ -1503,21 +1513,7 @@ export const AdminPage = () => {
                       <p className="text-xs sm:text-sm text-brand-grey">{filteredOrders.length} orders • Manage the full order lifecycle</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                      <div className="flex gap-1 bg-[#F3F0EC] border border-brand-card/50 p-1 rounded-full">
-                        {["All", "Online", "Offline"].map(src => (
-                          <button
-                            key={src}
-                            onClick={() => setOrderSource(src)}
-                            className={`px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
-                              orderSource === src
-                                ? "bg-[#3f312b] text-white shadow-sm"
-                                : "text-brand-grey hover:text-brand-dark"
-                            }`}
-                          >
-                            {src}
-                          </button>
-                        ))}
-                      </div>
+                      <SourceFilter value={orderSource} onChange={setOrderSource} />
                       <DateRangeFilter value={orderDateRange} onChange={setOrderDateRange} />
                       <Button
                         variant="outline" 
@@ -4825,7 +4821,7 @@ const PaymentsTab = ({ orders }) => {
   );
 };
 
-const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualOrderModal }) => {
+const DashboardOverview = ({ orders, source, setSource, productsList, inventoryList, setShowManualOrderModal }) => {
   const today = new Date().toDateString();
   const todayOrders = orders.filter(o => new Date(o.created_at).toDateString() === today);
   const todayRevenue = todayOrders.filter(o => o.status !== "cancelled").reduce((sum, o) => sum + (Number(o.totalPrice) || 0), 0);
@@ -4837,7 +4833,6 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
   const codOrdersCount = orders.filter(o => o.paymentMethod === "cod" && o.status !== "cancelled").length;
   const pendingDispatchCount = orders.filter(o => o.status === "pending").length;
   const deliveredCount = orders.filter(o => o.status === "delivered").length;
-  const cancelledCount = orders.filter(o => o.status === "cancelled").length;
   const inventoryValue = productsList.reduce((sum, p) => {
     const inv = inventoryList.find(i => i.product_id === (p.id || p._id));
     const available = inv ? inv.available : 0;
@@ -4876,7 +4871,8 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
           <h2 className="text-2xl font-serif font-semibold text-brand-dark">Good morning, Admin</h2>
           <p className="text-xs text-brand-grey mt-1">Here's what's happening across your store today.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <SourceFilter value={source} onChange={setSource} />
           <Button variant="outline" onClick={() => setViewTab("reports")} className="text-xs py-2 px-4 border border-brand-card/60 bg-white hover:bg-brand-bg rounded-full flex items-center gap-2 shadow-sm h-[36px]">
             <Download size={14} /> Export
           </Button>
@@ -4895,7 +4891,6 @@ const DashboardOverview = ({ orders, productsList, inventoryList, setShowManualO
         <StatCard title="COD Orders" value={codOrdersCount} icon={Wallet} trendStr="3%" isPositive={false} />
         <StatCard title="Pending Dispatch" value={pendingDispatchCount} icon={Clock} hideTrend={true} />
         <StatCard title="Delivered" value={deliveredCount} icon={Package} trendStr="15%" isPositive={true} />
-        <StatCard title="Cancelled" value={cancelledCount} icon={XCircle} trendStr="4%" isPositive={false} />
 
         <StatCard title="Inventory Value" value={`₹${inventoryValue.toLocaleString('en-IN')}`} icon={Boxes} hideTrend={true} />
         <StatCard title="Products Sold Today" value={productsSoldToday} icon={Truck} trendStr="9%" isPositive={true} />
@@ -5917,6 +5912,25 @@ const TestimonialsManagerTab = ({ API_URL, fetchAuth, productsList }) => {
     </div>
   );
 };
+
+// ALL / ONLINE / OFFLINE pill toggle (online = website checkout, offline = manual admin order)
+const SourceFilter = ({ value, onChange }) => (
+  <div className="flex gap-1 bg-[#F3F0EC] border border-brand-card/50 p-1 rounded-full">
+    {["All", "Online", "Offline"].map(src => (
+      <button
+        key={src}
+        onClick={() => onChange(src)}
+        className={`px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-colors ${
+          value === src
+            ? "bg-[#3f312b] text-white shadow-sm"
+            : "text-brand-grey hover:text-brand-dark"
+        }`}
+      >
+        {src}
+      </button>
+    ))}
+  </div>
+);
 
 // Single date filter: click one day for a single date, click a second day to make it a range.
 const DateRangeFilter = ({ value, onChange }) => {
