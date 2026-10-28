@@ -1,23 +1,26 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { API_URL } from "../config";
 import { Button } from "../components/Button";
 import { Search, MapPin, Truck, CheckCircle2, Calendar, Link as LinkIcon, ShieldCheck } from "lucide-react";
 
 export const TrackPage = () => {
-  const [query, setQuery] = useState("");
+  // Email tracking links open /track?id=<order number or AWB> and track automatically
+  const [searchParams] = useSearchParams();
+  const linkedId = searchParams.get("id") || "";
+  const [query, setQuery] = useState(linkedId);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [trackData, setTrackData] = useState(null);
 
-  const handleTrack = async (e) => {
-    e.preventDefault();
-    if (!query) return;
+  const trackOrder = async (code) => {
+    if (!code) return;
     setLoading(true);
     setError("");
     setTrackData(null);
 
     try {
-      const res = await fetch(`${API_URL}/api/orders/track/${query.trim().toUpperCase()}`);
+      const res = await fetch(`${API_URL}/api/orders/track/${encodeURIComponent(code.trim().toUpperCase())}`);
       if (!res.ok) {
         throw new Error("Tracking number or order not found. Check the code and try again.");
       }
@@ -29,6 +32,18 @@ export const TrackPage = () => {
       setLoading(false);
     }
   };
+
+  const handleTrack = (e) => {
+    e.preventDefault();
+    trackOrder(query);
+  };
+
+  useEffect(() => {
+    if (linkedId) {
+      setQuery(linkedId);
+      trackOrder(linkedId);
+    }
+  }, [linkedId]);
 
   const getStatusStep = (status) => {
     const s = status?.toLowerCase();

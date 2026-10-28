@@ -4,6 +4,8 @@ import re
 import json
 import random
 import base64
+import html as html_lib
+from urllib.parse import quote
 import httpx
 import asyncio
 from datetime import datetime, timezone
@@ -416,9 +418,137 @@ async def get_product(slug_or_id: str):
     return product
 
 
+# --- Order Emails ---
+def get_site_url(request: Request) -> str:
+    # SITE_URL wins if set; otherwise use the origin the request came from, so links follow whichever domain is live
+    site_url = os.getenv("SITE_URL") or request.headers.get("origin") or str(request.base_url)
+    return site_url.rstrip("/")
+
+def send_order_email(order: dict, kind: str, site_url: str):
+    """Send an order email to the customer. kind is "confirmed" (order placed) or "shipped" (AWB booked)."""
+    to_email = order.get("email") or order.get("user_id")
+    if not to_email or "@" not in to_email or to_email == "guest@luscentglow.com":
+        print(f"No customer email on order {order.get('order_number')}, skipping {kind} email")
+        return
+
+    smtp_server = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    if not all([smtp_server, smtp_user, smtp_pass]):
+        print(f"Warning: SMTP credentials not set in .env. {kind} email for {order.get('order_number')} not sent.")
+        return
+
+    esc = html_lib.escape
+    order_number = order.get("order_number", "")
+    awb = order.get("tracking_number")
+    track_url = f"{site_url}/track?id={quote(awb or order_number)}"
+    # Mock AWBs (DLV...) don't exist on Delhivery, so only link real numeric waybills
+    delhivery_url = f"https://www.delhivery.com/track/package/{awb}" if awb and awb.isdigit() else None
+    name = order.get("name", "")
+    total = float(order.get("totalPrice") or 0)
+    payment = "Cash on Delivery" if order.get("paymentMethod") == "cod" else "Prepaid"
+    address = ", ".join(str(order.get(k)) for k in ("address", "city", "state", "pincode") if order.get(k))
+
+    if kind == "shipped":
+        subject = f"Your Luscent Glow order {order_number} has shipped!"
+        heading = "Your order is on its way!"
+        intro = "Great news! Your order has been handed over to our delivery partner. You can follow your package using the link below."
+    else:
+        subject = f"Order Confirmed - {order_number} | Luscent Glow"
+        heading = "Thank you for your order!"
+        intro = "Your order has been confirmed and is being prepared. We'll email you again with the courier tracking number once it ships."
+
+    item_rows = "".join(
+        f"""<tr>
+              <td style="padding:8px 0; border-bottom:1px solid #eeeeee;">{esc(str(it.get('name', '')))} &times; {int(it.get('quantity', 0))}</td>
+              <td style="padding:8px 0; border-bottom:1px solid #eeeeee; text-align:right;">&#8377;{float(it.get('price', 0)) * int(it.get('quantity', 0)):.2f}</td>
+            </tr>"""
+        for it in order.get("items", [])
+    )
+    discount = float(order.get("discountAmount") or 0)
+    discount_row = f"""<tr><td style="padding:8px 0; color:#2e7d32;">Discount</td><td style="padding:8px 0; text-align:right; color:#2e7d32;">-&#8377;{discount:.2f}</td></tr>""" if discount > 0 else ""
+
+    def info_cell(label, value):
+        return f"""<td style="vertical-align:top; padding:4px 8px;">
+                    <div style="font-size:11px; color:#888888; text-transform:uppercase; letter-spacing:1px;">{label}</div>
+                    <div style="font-size:16px; font-weight:bold; color:#0F0F0F; margin-top:4px;">{value}</div>
+                  </td>"""
+
+    info_cells = info_cell("Order Number", esc(order_number)) + info_cell("Payment", payment)
+    tracking_row = ""
+    if kind == "shipped" and awb:
+        delhivery_link = f"""<div style="margin-top:4px;"><a href="{delhivery_url}" style="font-size:12px; color:#d97743;">Track on Delhivery</a></div>""" if delhivery_url else ""
+        tracking_row = f"""<tr>
+                  <td colspan="2" style="padding:12px 8px 4px 8px; border-top:1px solid #e4e4e4;">
+                    <div style="font-size:11px; color:#888888; text-transform:uppercase; letter-spacing:1px;">Tracking Number ({esc(order.get('carrier') or 'Delhivery')})</div>
+                    <div style="font-size:16px; font-weight:bold; color:#0F0F0F; margin-top:4px; letter-spacing:1px;">{esc(awb)}</div>{delhivery_link}
+                  </td>
+                </tr>"""
+
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['From'] = f"Luscent Glow <{smtp_user}>"
+    msg['To'] = to_email
+    msg.set_content(
+        f"Hi {name},\n\n{intro}\n\nOrder Number: {order_number}\n"
+        + (f"Tracking Number (AWB): {awb}\n" if kind == "shipped" and awb else "")
+        + f"Total: Rs. {total:.2f} ({payment})\n\nTrack your order: {track_url}\n\nLuscent Glow Team"
+    )
+    msg.add_alternative(f"""\
+    <html>
+      <body style="margin:0; padding:0; background-color:#f9f9f9; font-family:Arial, sans-serif; color:#333333;">
+        <div style="max-width:600px; margin:20px auto; background:#ffffff; border-radius:8px; overflow:hidden; box-shadow:0 4px 6px rgba(0,0,0,0.05);">
+          <div style="background-color:#0F0F0F; padding:24px; text-align:center;">
+            <h1 style="color:#ffffff; margin:0; font-size:22px; letter-spacing:2px;">LUSCENT GLOW</h1>
+          </div>
+          <div style="padding:30px;">
+            <h2 style="color:#d97743; margin-top:0;">{heading}</h2>
+            <p>Hi {esc(name)},</p>
+            <p style="line-height:1.6;">{intro}</p>
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f4; border-radius:6px; margin:20px 0; padding:12px 8px;">
+              <tr>
+                {info_cells}
+              </tr>
+              {tracking_row}
+            </table>
+            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+              {item_rows}
+              {discount_row}
+              <tr>
+                <td style="padding:10px 0; font-weight:bold;">Total</td>
+                <td style="padding:10px 0; font-weight:bold; text-align:right;">&#8377;{total:.2f}</td>
+              </tr>
+            </table>
+            <p style="margin-top:20px; font-size:13px; color:#666666;"><strong>Shipping to:</strong> {esc(address)}</p>
+            <div style="text-align:center; margin:30px 0 10px 0;">
+              <a href="{track_url}" style="background-color:#d97743; color:#ffffff; text-decoration:none; padding:14px 28px; border-radius:6px; font-weight:bold; display:inline-block;">Track Your Order</a>
+            </div>
+          </div>
+          <div style="background-color:#f4f4f4; padding:15px; text-align:center; font-size:12px; color:#888888;">
+            <p style="margin:0;">Questions? Write to us at theluscentglow@gmail.com</p>
+            <p style="margin:5px 0 0 0;">&copy; {datetime.now().year} Luscent Glow. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+    </html>
+    """, subtype='html')
+
+    try:
+        context = ssl.create_default_context()
+        server = smtplib.SMTP(smtp_server, smtp_port)
+        if smtp_port == 587:
+            server.starttls(context=context)
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        print(f"Order {kind} email sent to {to_email} for {order_number}")
+    except Exception as e:
+        print(f"Failed to send order {kind} email for {order_number}: {e}")
+
 # --- Orders Routes ---
 @app.post("/api/orders", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Depends(get_current_user_optional)):
+async def create_order(order_in: OrderCreate, request: Request, background_tasks: BackgroundTasks, current_user: Optional[dict] = Depends(get_current_user_optional)):
     # Duplicate prevention (check if identical order was created within the last 5 seconds)
     from datetime import timedelta
     recent_cutoff = datetime.now(timezone.utc) - timedelta(seconds=5)
@@ -440,6 +570,7 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
     order_dict = order_in.dict()
     order_dict["order_number"] = order_number
     order_dict["user_id"] = current_user["email"] if current_user else None
+    order_dict["email"] = (order_dict.get("email") or "").strip() or (current_user["email"] if current_user else None)
     order_dict["status"] = "pending"
     order_dict["source"] = "offline" if order_dict.get("source") == "offline" else "online"
     if not order_dict.get("paymentStatus"):
@@ -483,6 +614,7 @@ async def create_order(order_in: OrderCreate, current_user: Optional[dict] = Dep
                 "created_at": datetime.now(timezone.utc)
             })
             
+    background_tasks.add_task(send_order_email, dict(order_dict), "confirmed", get_site_url(request))
     return order_dict
 
 @app.get("/api/orders", response_model=List[OrderResponse])
@@ -868,7 +1000,7 @@ async def hard_delete_admin_order(order_id: str, current_user: dict = Depends(ge
     return {"message": "Order permanently deleted"}
 
 @app.put("/api/admin/orders/{order_id}/status")
-async def update_order_status(order_id: str, body: OrderStatusUpdate, current_user: dict = Depends(get_admin_user)):
+async def update_order_status(order_id: str, body: OrderStatusUpdate, request: Request, background_tasks: BackgroundTasks, current_user: dict = Depends(get_admin_user)):
     from bson import ObjectId
     status_val = body.status
     if not status_val:
@@ -963,6 +1095,8 @@ async def update_order_status(order_id: str, body: OrderStatusUpdate, current_us
                 {"_id": ObjectId(order_id)},
                 {"$set": {"tracking_number": awb, "carrier": "Delhivery", "delhivery_status": "Manifested"}}
             )
+            if order.get("status") != "shipped":
+                background_tasks.add_task(send_order_email, {**order, "tracking_number": awb, "carrier": "Delhivery"}, "shipped", get_site_url(request))
             
     # Finally, update the status in DB now that shipping hasn't thrown an error
     await orders_collection.update_one(

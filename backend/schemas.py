@@ -121,6 +121,7 @@ class OrderItem(BaseModel):
 class OrderCreate(BaseModel):
     name: str
     phone: str
+    email: Optional[str] = None
     address: str
     city: str
     state: str

@@ -29,6 +29,7 @@ export const CheckoutPage = () => {
   // Form details
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState(user?.email || "");
   const [address, setAddress] = useState("");
   const [city, setCity] = useState("");
   const [shippingState, setShippingState] = useState("");
@@ -57,6 +58,7 @@ export const CheckoutPage = () => {
 
   useEffect(() => {
     if (user?.email) {
+      setEmail(prev => prev || user.email);
       try {
         const saved = JSON.parse(localStorage.getItem(`luscent_addresses_${user.email}`) || "[]");
         setSavedAddresses(saved);
@@ -225,7 +227,7 @@ export const CheckoutPage = () => {
 
   const handleShippingSubmit = (e) => {
     e.preventDefault();
-    if (!name || !phone || !address || !city || !shippingState || !pincode) {
+    if (!name || !phone || !email || !address || !city || !shippingState || !pincode) {
       alert("Please fill in all shipping fields.");
       return;
     }
@@ -314,6 +316,7 @@ export const CheckoutPage = () => {
       const orderData = {
         name,
         phone,
+        email: email.trim(),
         address,
         city,
         state: shippingState,
@@ -401,7 +404,7 @@ export const CheckoutPage = () => {
               },
               prefill: {
                 name: name,
-                email: user?.email || "guest@luscentglow.com",
+                email: email || user?.email || "guest@luscentglow.com",
                 contact: phone
               },
               theme: {
@@ -436,7 +439,7 @@ export const CheckoutPage = () => {
                 amount: grandTotal,
                 name: name,
                 phone: phone,
-                email: user?.email || "guest@luscentglow.com",
+                email: email || user?.email || "guest@luscentglow.com",
                 order_id: tempOrderNum,
                 return_url: `${window.location.origin}/thank-you?order_id=${tempOrderNum}`
               })
@@ -589,6 +592,19 @@ export const CheckoutPage = () => {
               </div>
 
               <div>
+                <label className="text-xs uppercase tracking-wider font-semibold text-brand-dark block mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                  className="w-full px-4 py-3 bg-brand-bg/50 border border-brand-card rounded-xl text-xs focus:outline-none focus:border-brand-dark focus:bg-white transition-colors"
+                />
+                <p className="text-[10px] text-brand-grey mt-1">We'll send your order confirmation and tracking link here.</p>
+              </div>
+
+              <div>
                 <label className="text-xs uppercase tracking-wider font-semibold text-brand-dark block mb-1">Street Address</label>
                 <input
                   type="text"
@@ -714,7 +730,6 @@ export const CheckoutPage = () => {
                       <span className="text-[10px] text-brand-grey">Pay in cash or digital scan upon delivery</span>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold tracking-widest text-brand-grey">EASY</span>
                 </label>
               </div>
 
